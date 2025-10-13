@@ -49,50 +49,32 @@ class SearchAgent(BaseAgent):
             search_queries = query_result.data['queries'][:10]
             search_results = []
 
-            # 1. Try direct news search first (optimized for speed)
-            logger.info("🔍 Searching on Vietnamese news sites...")
+            # Search ONLY on Vietnamese trusted news sites (no Google)
+            # Faster and more reliable than Google search
+            logger.info("🔍 Searching directly on Vietnamese trusted news sites...")
             try:
                 from tools.direct_news_search import direct_news_search_tool
-                # Only use first 3 queries to save time
-                for query in search_queries[:3]:
-                    result = direct_news_search_tool.search_all_sites(query, max_results_per_site=2)
+                
+                # Use multiple queries for better coverage
+                for idx, query in enumerate(search_queries[:5], 1):
+                    logger.info(f"📰 Query {idx}/5: '{query}'")
+                    result = direct_news_search_tool.search_all_sites(
+                        query, 
+                        max_results_per_site=5  # Get more results from each site
+                    )
                     if result.success:
-                        search_results.extend(result.data['results'])
-                    # Stop if we already have enough results
-                    if len(search_results) >= 15:
-                        logger.info(f"✅ Got enough results ({len(search_results)}), stopping news site search")
+                        new_results = result.data['results']
+                        search_results.extend(new_results)
+                        logger.info(f"  → Found {len(new_results)} new articles")
+                    
+                    # Stop if we already have plenty of results
+                    if len(search_results) >= 30:
+                        logger.info(f"✅ Got enough results ({len(search_results)}), stopping search")
                         break
-                logger.info(f"Found {len(search_results)} results from news sites")
+                
+                logger.info(f"📊 Total found: {len(search_results)} articles from Vietnamese news sites")
             except Exception as e:
                 logger.warning(f"Direct news search failed: {str(e)}")
-
-            # 2. Also search on Google/web for more diverse results
-            # Only search Google if we don't have enough results from news sites
-            MIN_REQUIRED_RESULTS = 10
-            
-            if len(search_results) < MIN_REQUIRED_RESULTS:
-                logger.info(f"🌐 Searching on Google for additional articles (have {len(search_results)}, need {MIN_REQUIRED_RESULTS})...")
-                try:
-                    search_result = search_engine_tool.search_multiple_queries(
-                        queries=search_queries[:2],  # Only use first 2 queries for speed
-                        num_per_query=5  # Reduced to 5 results per query for speed
-                    )
-                    if search_result.success:
-                        web_results = search_result.data['results']
-                        logger.info(f"Found {len(web_results)} results from web search")
-                        # Deduplicate by URL
-                        existing_urls = {r['url'] for r in search_results}
-                        for r in web_results:
-                            if r['url'] not in existing_urls:
-                                search_results.append(r)
-                                existing_urls.add(r['url'])
-                        logger.info(f"Total unique results after combining: {len(search_results)}")
-                    else:
-                        logger.warning(f"Web search failed: {search_result.error}")
-                except Exception as e:
-                    logger.warning(f"Web search error: {str(e)}")
-            else:
-                logger.info(f"✅ Skipping Google search - already have {len(search_results)} results from news sites")
 
             # If we still have no results, that's an error
             if not search_results:
