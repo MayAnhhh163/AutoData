@@ -131,7 +131,17 @@ class ManagerAgent(BaseAgent):
                     logger.info("🔍 Next: Search for opinions")
 
 
-        elif TaskType.SEARCH_OPINIONS in completed_types and not state.get('scrape_articles_done', False):
+        # Check if we just completed a SCRAPE_ARTICLES task - handle this FIRST
+        if current_task.task_type == TaskType.SCRAPE_ARTICLES and current_task.status.value == 'completed':
+            # ArticleAnalyzerAgent already set scrape_articles_done and updated analyzed_articles
+            # Just log the completion
+            analyzed_articles = state.get('analyzed_articles', [])
+            new_articles = getattr(current_task, 'output_data', {}).get('articles', [])
+            logger.info(f"📰 Scrape task completed: {len(new_articles)} new articles in this batch")
+            logger.info(f"📊 Total articles in state: {len(analyzed_articles)}")
+
+        # Only create new scrape tasks if not done yet
+        if TaskType.SEARCH_OPINIONS in completed_types and not state.get('scrape_articles_done', False):
             search_results = state.get('search_results', [])
             if search_results:
                 # Lọc URLs đã scrape
@@ -147,17 +157,6 @@ class ManagerAgent(BaseAgent):
                     # No new URLs to scrape, mark as done
                     logger.info("📰 All URLs already processed, marking scrape as done")
                     state['scrape_articles_done'] = True
-
-        # Nếu task SCRAPE_ARTICLES vừa hoàn thành
-        if current_task.task_type == TaskType.SCRAPE_ARTICLES and current_task.status.value == 'completed':
-            # Check if scrape_articles_done is already set by ArticleAnalyzerAgent
-            if not state.get('scrape_articles_done', False):
-                analyzed_articles = state.get('analyzed_articles', [])
-                new_articles = getattr(current_task, 'output_data', {}).get('articles', [])
-                analyzed_articles.extend(new_articles)
-                state['analyzed_articles'] = analyzed_articles
-                state['scrape_articles_done'] = True
-                logger.info(f"📰 Scrape completed: {len(new_articles)} new articles added")
 
         # Check if we should move to export - either SCRAPE_ARTICLES completed or scrape is done
         scrape_is_complete = (TaskType.SCRAPE_ARTICLES in completed_types or 

@@ -101,7 +101,6 @@ class ArticleAnalyzerAgent(BaseAgent):
             name="Article Analyzer Agent",
             description="Scrapes articles and analyzes sentiment of public opinions"
         )
-        self.loop_counter = 0
 
     def analyze_sentiment(self, text: str) -> str:
         blob = TextBlob(text)
@@ -118,9 +117,12 @@ class ArticleAnalyzerAgent(BaseAgent):
             if not current_task or current_task.task_type != TaskType.SCRAPE_ARTICLES:
                 return state
 
+            # Use state-based loop counter instead of instance variable
+            scrape_loop_count = state.get('scrape_loop_count', 0)
+            
             # Check if max loop reached
-            if self.loop_counter >= self.MAX_LOOP:
-                logger.warning(f"Max loop reached for {self.name}")
+            if scrape_loop_count >= self.MAX_LOOP:
+                logger.warning(f"Max loop reached for {self.name} (count: {scrape_loop_count})")
                 # Complete the task and mark scrape as done
                 task = self.complete_task(current_task, {
                     'articles_count': 0,
@@ -180,6 +182,7 @@ class ArticleAnalyzerAgent(BaseAgent):
                 })
                 
                 logger.info(f"✅ Analyzed {len(analyzed_articles_new)} articles with sentiment")
+                logger.info(f"📊 Total analyzed articles in state: {len(analyzed_articles)}")
             else:
                 task = self.complete_task(current_task, {}, error=scrape_result.error)
                 # Still mark as done even on error to prevent infinite loop
@@ -189,7 +192,8 @@ class ArticleAnalyzerAgent(BaseAgent):
                 })
                 state = self.log_error(state, scrape_result.error)
 
-            self.loop_counter += 1
+            # Increment state-based loop counter
+            state['scrape_loop_count'] = scrape_loop_count + 1
             return state
 
         except Exception as e:
@@ -207,13 +211,15 @@ class ExporterAgent(BaseAgent):
             name="Exporter Agent",
             description="Exports articles to CSV and vector database"
         )
-        self.loop_counter = 0
         self.embedding_model = embedding_model  # Có thể truyền từ ngoài hoặc khởi tạo bên trong
 
     async def execute(self, state: AgentState) -> AgentState:
         try:
-            if self.loop_counter >= self.MAX_LOOP:
-                logger.warning(f"Max loop reached for {self.name}")
+            # Use state-based loop counter
+            export_loop_count = state.get('export_loop_count', 0)
+            
+            if export_loop_count >= self.MAX_LOOP:
+                logger.warning(f"Max loop reached for {self.name} (count: {export_loop_count})")
                 return state
 
             current_task = state.get('current_task')
@@ -221,6 +227,7 @@ class ExporterAgent(BaseAgent):
                 return state
 
             articles = state.get('analyzed_articles', [])
+            logger.info(f"📊 ExporterAgent found {len(articles)} articles in state")
             if not articles:
                 return self.log_error(state, "No articles found to export")
 
@@ -287,10 +294,10 @@ class ExporterAgent(BaseAgent):
             state = self.update_state(state, {
                 'current_task': task,
                 'csv_output_path': csv_path,
-                'is_complete': True
+                'is_complete': True,
+                'export_loop_count': export_loop_count + 1
             })
 
-            self.loop_counter += 1
             logger.info(f"🎉 Workflow completed: {len(articles)} articles exported to {csv_path}")
             return state
 
