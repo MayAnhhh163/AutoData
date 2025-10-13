@@ -9,9 +9,15 @@ from langgraph.graph import StateGraph, END
 from core.types import AgentState, TaskType, create_initial_state
 from agents import (
     manager_agent,
+    # New workflow agents
+    news_search_agent,
+    news_scraper_agent,
+    keyword_extractor_agent,
+    # Old PDF workflow agents (kept for compatibility)
     web_crawler_agent,
     pdf_handler_agent,
     content_extractor_agent,
+    # Opinion search agents
     search_agent,
     article_analyzer_agent,
     exporter_agent
@@ -26,9 +32,18 @@ def create_workflow() -> StateGraph:
 
     # Nodes
     workflow.add_node("manager", manager_agent.execute)
+    
+    # New workflow nodes (article-based)
+    workflow.add_node("news_search_agent", news_search_agent.execute)
+    workflow.add_node("news_scraper_agent", news_scraper_agent.execute)
+    workflow.add_node("keyword_extractor_agent", keyword_extractor_agent.execute)
+    
+    # Old PDF workflow nodes (kept for compatibility)
     workflow.add_node("web_crawler", web_crawler_agent.execute)
     workflow.add_node("pdf_handler", pdf_handler_agent.execute)
     workflow.add_node("content_extractor", content_extractor_agent.execute)
+    
+    # Opinion search nodes (common to both workflows)
     workflow.add_node("search_agent", search_agent.execute)
     workflow.add_node("article_analyzer", article_analyzer_agent.execute)
     workflow.add_node("exporter_agent", exporter_agent.execute)
@@ -51,9 +66,15 @@ def create_workflow() -> StateGraph:
 
         task_type = current_task.task_type
         next_agent = {
+            # New workflow routing
+            TaskType.SEARCH_NEWS: "news_search_agent",
+            TaskType.SCRAPE_NEWS_ARTICLES: "news_scraper_agent",
+            TaskType.EXTRACT_KEYWORDS_FROM_NEWS: "keyword_extractor_agent",
+            # Old PDF workflow routing
             TaskType.CRAWL_WEB: "web_crawler",
             TaskType.DOWNLOAD_PDF: "pdf_handler",
             TaskType.EXTRACT_CONTENT: "content_extractor",
+            # Opinion search routing (common)
             TaskType.SEARCH_OPINIONS: "search_agent",
             TaskType.SCRAPE_ARTICLES: "article_analyzer",
             TaskType.EXPORT_DATA: "exporter_agent"
@@ -76,9 +97,15 @@ def create_workflow() -> StateGraph:
         "manager",
         route_from_manager,
         {
+            # New workflow edges
+            "news_search_agent": "news_search_agent",
+            "news_scraper_agent": "news_scraper_agent",
+            "keyword_extractor_agent": "keyword_extractor_agent",
+            # Old PDF workflow edges
             "web_crawler": "web_crawler",
             "pdf_handler": "pdf_handler",
             "content_extractor": "content_extractor",
+            # Opinion search edges
             "search_agent": "search_agent",
             "article_analyzer": "article_analyzer",
             "exporter_agent": "exporter_agent",
@@ -86,7 +113,9 @@ def create_workflow() -> StateGraph:
         }
     )
 
-    for node in ["web_crawler", "pdf_handler", "content_extractor",
+    # All nodes return to manager after completion
+    for node in ["news_search_agent", "news_scraper_agent", "keyword_extractor_agent",
+                 "web_crawler", "pdf_handler", "content_extractor",
                  "search_agent", "article_analyzer", "exporter_agent"]:
         workflow.add_conditional_edges(node, should_continue)
 

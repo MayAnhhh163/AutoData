@@ -6,10 +6,228 @@ from textblob import TextBlob
 from datetime import datetime
 
 from agents.base import BaseAgent
-from core.types import AgentState, AgentRole, TaskType
+from core.types import AgentState, AgentRole, TaskType, ExtractedKeywords
 from tools import search_engine_tool, text_analyzer_tool, csv_exporter_tool, vector_db_tool
 
 logger = logging.getLogger(__name__)
+
+
+class NewsSearchAgent(BaseAgent):
+    """News Search Agent - Tìm tin tức về dự luật/chủ đề."""
+
+    def __init__(self):
+        super().__init__(
+            role=AgentRole.SEARCH_AGENT,
+            name="News Search Agent",
+            description="Searches for news articles about the law/topic"
+        )
+
+    async def execute(self, state: AgentState) -> AgentState:
+        try:
+            logger.info(f"📰 {self.name} executing...")
+
+            current_task = state.get('current_task')
+            if not current_task or current_task.task_type != TaskType.SEARCH_NEWS:
+                return state
+
+            topic = current_task.input_data.get('topic', state['project_name'])
+            
+            # Generate search queries for NEWS (not opinions)
+            news_queries = [
+                f"{topic}",
+                f"{topic} nội dung",
+                f"{topic} quy định",
+                f"{topic} chi tiết",
+                f"toàn văn {topic}",
+            ]
+            
+            logger.info(f"🔍 Searching for news about: {topic}")
+            
+            search_results = []
+            try:
+                from tools.direct_news_search import direct_news_search_tool
+
+                # Search with news-focused queries
+                for idx, query in enumerate(news_queries[:3], 1):
+                    logger.info(f"📰 Query {idx}/3: '{query}'")
+                    result = direct_news_search_tool.search_all_sites(
+                        query,
+                        max_results_per_site=10
+                    )
+                    if result.success:
+                        new_results = result.data['results']
+                        search_results.extend(new_results)
+                        logger.info(f"  → Found {len(new_results)} articles")
+
+                    if len(search_results) >= 30:
+                        logger.info(f"✅ Got enough news articles ({len(search_results)})")
+                        break
+
+                logger.info(f"📊 Total found: {len(search_results)} news articles")
+            except Exception as e:
+                logger.warning(f"News search failed: {str(e)}")
+
+            if not search_results:
+                error_msg = "No news articles found"
+                task = self.complete_task(current_task, {}, error=error_msg)
+                return self.log_error(state, error_msg)
+
+            # Deduplication
+            unique_results = []
+            seen_urls = set()
+            for result in search_results:
+                url = result.get('url', '')
+                if url and url not in seen_urls and (url.startswith('http://') or url.startswith('https://')):
+                    seen_urls.add(url)
+                    unique_results.append(result)
+
+            logger.info(f"📊 After deduplication: {len(unique_results)} unique news articles")
+
+            task = self.complete_task(current_task, {
+                'search_queries': news_queries,
+                'total_results': len(unique_results)
+            })
+
+            state = self.update_state(state, {
+                'current_task': task,
+                'search_queries': news_queries,
+                'search_results': unique_results[:30]  # Top 30
+            })
+
+            return state
+
+        except Exception as e:
+            logger.error(f"News search agent error: {str(e)}")
+            return self.log_error(state, f"News search failed: {str(e)}")
+
+
+class NewsScraperAgent(BaseAgent):
+    """News Scraper Agent - Scrape nội dung tin tức về dự luật."""
+
+    def __init__(self):
+        super().__init__(
+            role=AgentRole.SCRAPER_AGENT,
+            name="News Scraper Agent",
+            description="Scrapes news article content"
+        )
+
+    async def execute(self, state: AgentState) -> AgentState:
+        try:
+            logger.info(f"📄 {self.name} executing...")
+
+            current_task = state.get('current_task')
+            if not current_task or current_task.task_type != TaskType.SCRAPE_NEWS_ARTICLES:
+                return state
+
+            urls_to_scrape = current_task.input_data.get('urls_to_scrape', [])
+            if not urls_to_scrape:
+                logger.warning("No URLs to scrape for news")
+                task = self.complete_task(current_task, {'articles_count': 0})
+                state = self.update_state(state, {
+                    'current_task': task,
+                    'news_articles': [],
+                    'scrape_news_done': True
+                })
+                return state
+
+            from tools.article_scraper import article_scraper_tool
+            scrape_result = article_scraper_tool.scrape_multiple_articles(urls_to_scrape)
+
+            if scrape_result.success:
+                articles = scrape_result.data['articles']
+                articles_dict = [a.to_dict() for a in articles]
+                
+                logger.info(f"✅ Scraped {len(articles_dict)} news articles")
+
+                task = self.complete_task(current_task, {
+                    'articles_count': len(articles_dict),
+                    'urls_scraped': len(articles)
+                })
+
+                state = self.update_state(state, {
+                    'current_task': task,
+                    'news_articles': articles_dict,
+                    'scrape_news_done': True
+                })
+            else:
+                task = self.complete_task(current_task, {}, error=scrape_result.error)
+                state = self.update_state(state, {'current_task': task, 'scrape_news_done': True})
+                state = self.log_error(state, scrape_result.error)
+
+            return state
+
+        except Exception as e:
+            logger.error(f"News scraper error: {str(e)}")
+            return self.log_error(state, f"News scraping failed: {str(e)}")
+
+
+class KeywordExtractorAgent(BaseAgent):
+    """Keyword Extractor Agent - Extract keywords từ tin tức."""
+
+    def __init__(self):
+        super().__init__(
+            role=AgentRole.CONTENT_EXTRACTOR,
+            name="Keyword Extractor Agent",
+            description="Extracts keywords from news articles"
+        )
+
+    async def execute(self, state: AgentState) -> AgentState:
+        try:
+            logger.info(f"🔑 {self.name} executing...")
+
+            current_task = state.get('current_task')
+            if not current_task or current_task.task_type != TaskType.EXTRACT_KEYWORDS_FROM_NEWS:
+                return state
+
+            news_articles = current_task.input_data.get('news_articles', state.get('news_articles', []))
+            if not news_articles:
+                error_msg = "No news articles to extract keywords from"
+                task = self.complete_task(current_task, {}, error=error_msg)
+                return self.log_error(state, error_msg)
+
+            # Combine all article content
+            all_content = "\n\n".join([
+                f"{art.get('title', '')} {art.get('content', '')}" 
+                for art in news_articles
+            ])
+            
+            logger.info(f"📝 Extracting keywords from {len(news_articles)} news articles ({len(all_content)} chars)")
+
+            # Extract keywords using existing tool
+            from tools.pdf_extractor import pdf_extractor_tool
+            keywords_result = pdf_extractor_tool.extract_keywords_from_text(all_content)
+
+            if keywords_result.success:
+                keywords = keywords_result.data.get('keywords', [])
+                key_phrases = keywords_result.data.get('key_phrases', [])
+                
+                extracted_keywords = ExtractedKeywords(
+                    main_keywords=keywords[:20],
+                    key_phrases=key_phrases[:20],
+                    entities=[],
+                    summary=f"Extracted from {len(news_articles)} news articles"
+                )
+
+                logger.info(f"✅ Extracted {len(keywords)} keywords and {len(key_phrases)} key phrases")
+
+                task = self.complete_task(current_task, {
+                    'keywords_count': len(keywords),
+                    'phrases_count': len(key_phrases)
+                })
+
+                state = self.update_state(state, {
+                    'current_task': task,
+                    'extracted_keywords': extracted_keywords
+                })
+            else:
+                task = self.complete_task(current_task, {}, error=keywords_result.error)
+                state = self.log_error(state, keywords_result.error)
+
+            return state
+
+        except Exception as e:
+            logger.error(f"Keyword extractor error: {str(e)}")
+            return self.log_error(state, f"Keyword extraction failed: {str(e)}")
 
 
 class SearchAgent(BaseAgent):
@@ -412,6 +630,12 @@ class ExporterAgent(BaseAgent):
             return self.log_error(state, f"Export failed: {str(e)}")
 
 # Singleton instances
+# New workflow agents
+news_search_agent = NewsSearchAgent()
+news_scraper_agent = NewsScraperAgent()
+keyword_extractor_agent = KeywordExtractorAgent()
+
+# Opinion search agents
 search_agent = SearchAgent()
 scraper_agent = ArticleAnalyzerAgent()
 article_analyzer_agent = ArticleAnalyzerAgent()

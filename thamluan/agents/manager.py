@@ -52,19 +52,20 @@ class ManagerAgent(BaseAgent):
 
     async def _start_workflow(self, state: AgentState) -> AgentState:
         """
-        Bắt đầu workflow mới.
+        Bắt đầu workflow mới - Article-based (không cần PDF).
         """
-        logger.info("Starting new workflow...")
+        logger.info("Starting new workflow (article-based)...")
 
         target_url = state['target_url']
         project_name = state['project_name']
 
         logger.info(f"Project: {project_name}")
-        logger.info(f"Target URL: {target_url}")
+        logger.info(f"Target URL (optional): {target_url}")
 
+        # Start with searching for news articles about the law
         task = self.create_task(
-            task_type=TaskType.CRAWL_WEB.value,
-            input_data={'url': target_url, 'find_pdf': True}
+            task_type=TaskType.SEARCH_NEWS.value,
+            input_data={'topic': project_name, 'reference_url': target_url}
         )
 
         state = self.update_state(state, {'current_task': task})
@@ -99,28 +100,32 @@ class ManagerAgent(BaseAgent):
 
         next_task = None
 
-        # Workflow logic
-        if TaskType.CRAWL_WEB in completed_types and TaskType.DOWNLOAD_PDF not in completed_types:
-            if not task_already_created(TaskType.DOWNLOAD_PDF):
-                pdf_links = state.get('pdf_document', {})
-                if pdf_links:
+        # NEW WORKFLOW LOGIC (Article-based, no PDF)
+        # Step 1: SEARCH_NEWS → SCRAPE_NEWS_ARTICLES
+        if TaskType.SEARCH_NEWS in completed_types and TaskType.SCRAPE_NEWS_ARTICLES not in completed_types:
+            if not task_already_created(TaskType.SCRAPE_NEWS_ARTICLES):
+                search_results = state.get('search_results', [])
+                if search_results:
+                    urls_to_scrape = [r['url'] for r in search_results[:20]]  # Top 20 news articles
                     next_task = self.create_task(
-                        task_type=TaskType.DOWNLOAD_PDF.value,
-                        input_data={'pdf_links': pdf_links}
+                        task_type=TaskType.SCRAPE_NEWS_ARTICLES.value,
+                        input_data={'urls_to_scrape': urls_to_scrape}
                     )
-                    logger.info("📥 Next: Download PDF")
+                    logger.info(f"📰 Next: Scrape {len(urls_to_scrape)} news articles")
 
-        elif TaskType.DOWNLOAD_PDF in completed_types and TaskType.EXTRACT_CONTENT not in completed_types:
-            if not task_already_created(TaskType.EXTRACT_CONTENT):
-                pdf_path = state.get('pdf_local_path')
-                if pdf_path:
+        # Step 2: SCRAPE_NEWS_ARTICLES → EXTRACT_KEYWORDS_FROM_NEWS
+        elif TaskType.SCRAPE_NEWS_ARTICLES in completed_types and TaskType.EXTRACT_KEYWORDS_FROM_NEWS not in completed_types:
+            if not task_already_created(TaskType.EXTRACT_KEYWORDS_FROM_NEWS):
+                news_articles = state.get('news_articles', [])
+                if news_articles:
                     next_task = self.create_task(
-                        task_type=TaskType.EXTRACT_CONTENT.value,
-                        input_data={'pdf_path': pdf_path}
+                        task_type=TaskType.EXTRACT_KEYWORDS_FROM_NEWS.value,
+                        input_data={'news_articles': news_articles}
                     )
-                    logger.info("📄 Next: Extract PDF content")
+                    logger.info(f"🔑 Next: Extract keywords from {len(news_articles)} articles")
 
-        elif TaskType.EXTRACT_CONTENT in completed_types and TaskType.SEARCH_OPINIONS not in completed_types:
+        # Step 3: EXTRACT_KEYWORDS_FROM_NEWS → SEARCH_OPINIONS
+        elif TaskType.EXTRACT_KEYWORDS_FROM_NEWS in completed_types and TaskType.SEARCH_OPINIONS not in completed_types:
             if not task_already_created(TaskType.SEARCH_OPINIONS):
                 keywords = state.get('extracted_keywords')
                 if keywords:
@@ -128,7 +133,7 @@ class ManagerAgent(BaseAgent):
                         task_type=TaskType.SEARCH_OPINIONS.value,
                         input_data={'keywords': keywords}
                     )
-                    logger.info("🔍 Next: Search for opinions")
+                    logger.info("🔍 Next: Search for public opinions")
 
         # Check if we just completed a SCRAPE_ARTICLES task - handle this FIRST
         if current_task.task_type == TaskType.SCRAPE_ARTICLES and current_task.status.value == 'completed':
