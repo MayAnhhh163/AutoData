@@ -36,11 +36,20 @@ def create_workflow() -> StateGraph:
     # Routing từ manager dựa vào task hiện tại
     def route_from_manager(state: AgentState) -> str:
         current_task = state.get('current_task')
-        if not current_task or state.get('is_complete'):
+        is_complete = state.get('is_complete', False)
+        
+        logger.info(f"🔀 Routing: current_task={current_task.task_type.value if current_task else 'None'}, is_complete={is_complete}")
+        
+        if not current_task:
+            logger.info("❌ No current task, ending workflow")
+            return END
+        
+        if is_complete:
+            logger.info("✅ Workflow marked as complete, ending")
             return END
 
         task_type = current_task.task_type
-        return {
+        next_agent = {
             TaskType.CRAWL_WEB: "web_crawler",
             TaskType.DOWNLOAD_PDF: "pdf_handler",
             TaskType.EXTRACT_CONTENT: "content_extractor",
@@ -48,6 +57,9 @@ def create_workflow() -> StateGraph:
             TaskType.SCRAPE_ARTICLES: "article_analyzer",
             TaskType.EXPORT_DATA: "exporter_agent"
         }.get(task_type, END)
+        
+        logger.info(f"➡️  Routing to: {next_agent}")
+        return next_agent
 
     # Check workflow continue
     def should_continue(state: AgentState) -> str:
