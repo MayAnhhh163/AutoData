@@ -9,7 +9,7 @@ import numpy as np
 from sentence_transformers import SentenceTransformer
 
 from agents.base import BaseAgent
-from core.types import AgentState, AgentRole, TaskType, PDFDocument
+from core.types import AgentState, AgentRole, TaskType, TaskStatus, PDFDocument
 from tools import (
     web_crawler_tool,
     pdf_handler_tool,
@@ -39,7 +39,12 @@ class WebCrawlerAgent(BaseAgent):
             logger.info(f"🕷️  {self.name} executing...")
 
             current_task = state.get('current_task')
-            if not current_task or current_task.task_type != TaskType.CRAWL_WEB:
+            # Only run when this agent owns a PENDING task
+            if (
+                not current_task
+                or current_task.task_type != TaskType.CRAWL_WEB
+                or current_task.status != TaskStatus.PENDING
+            ):
                 return state
 
             url = current_task.input_data.get('url') or state['target_url']
@@ -99,7 +104,12 @@ class PDFHandlerAgent(BaseAgent):
             logger.info(f"📥 {self.name} executing...")
 
             current_task = state.get('current_task')
-            if not current_task or current_task.task_type != TaskType.DOWNLOAD_PDF:
+            # Only run when this agent owns a PENDING task
+            if (
+                not current_task
+                or current_task.task_type != TaskType.DOWNLOAD_PDF
+                or current_task.status != TaskStatus.PENDING
+            ):
                 return state
 
             pdf_document = state.get('pdf_document')
@@ -161,7 +171,12 @@ class ContentExtractorAgent(BaseAgent):
             logger.info(f"📄 {self.name} executing...")
 
             current_task = state.get('current_task')
-            if not current_task or current_task.task_type != TaskType.EXTRACT_CONTENT:
+            # Only run when this agent owns a PENDING task
+            if (
+                not current_task
+                or current_task.task_type != TaskType.EXTRACT_CONTENT
+                or current_task.status != TaskStatus.PENDING
+            ):
                 return state
 
             pdf_path = state.get('pdf_local_path')
