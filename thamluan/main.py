@@ -38,17 +38,34 @@ def main():
         logger.error("Configuration validation failed. Please check your setup.")
         return
 
-    # Get target URL and project name
-    target_url = args.url or "https://mst.gov.vn/van-ban-phap-luat/du-thao/2256.htm"
-    project_name = args.project or "Luật Khoa học, công nghệ và đổi mới sáng tạo 2025"
+    # Get keywords or URL
+    keywords = args.keywords
+    target_url = args.url
 
-    logger.info(f"Target URL: {target_url}")
-    logger.info(f"Project Name: {project_name}")
+    # Validation: Must have either keywords or URL
+    if not keywords and not target_url:
+        logger.error("❌ You must provide either --keywords or --url")
+        logger.info("Example: python main.py --keywords \"Luật Khoa học công nghệ 2025\"")
+        return
+
+    # Auto-generate project name from keywords if not provided
+    if keywords:
+        project_name = args.project or keywords
+        logger.info(f"🔍 Keywords: {keywords}")
+    else:
+        project_name = args.project or "Legal Document Analysis"
+        logger.info(f"🌐 Target URL: {target_url}")
+
+    logger.info(f"📁 Project Name: {project_name}")
 
     try:
         # Run workflow asynchronously
         logger.info("Running workflow asynchronously...")
-        final_state = asyncio.run(run_workflow_async(target_url, project_name))
+        final_state = asyncio.run(run_workflow_async(
+            project_name=project_name,
+            target_url=target_url,
+            keywords=keywords
+        ))
 
         # Display results
         logger.info("=" * 80)

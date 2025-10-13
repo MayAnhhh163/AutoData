@@ -56,22 +56,36 @@ class ManagerAgent(BaseAgent):
         """
         logger.info("Starting new workflow...")
 
-        target_url = state['target_url']
+        keywords = state.get('keywords')
+        target_url = state.get('target_url')
         project_name = state['project_name']
 
         logger.info(f"Project: {project_name}")
-        logger.info(f"Target URL: {target_url}")
 
-        task = self.create_task(
-            task_type=TaskType.CRAWL_WEB.value,
-            input_data={'url': target_url, 'find_pdf': True}
-        )
+        # Workflow mới: Nếu có keywords, tìm kiếm PDF tự động
+        if keywords:
+            logger.info(f"🔍 Keywords mode: {keywords}")
+            task = self.create_task(
+                task_type=TaskType.SEARCH_PDF_BY_KEYWORDS.value,
+                input_data={'keywords': keywords}
+            )
+        # Workflow cũ: Nếu có URL, crawl web như cũ
+        elif target_url:
+            logger.info(f"🌐 URL mode: {target_url}")
+            task = self.create_task(
+                task_type=TaskType.CRAWL_WEB.value,
+                input_data={'url': target_url, 'find_pdf': True}
+            )
+        else:
+            logger.error("No keywords or target_url provided!")
+            return self.log_error(state, "Either keywords or target_url must be provided")
+
 
         state = self.update_state(state, {'current_task': task})
         from core.types import update_state_task
         state = update_state_task(state, task)
 
-        logger.info(f"✅ Created first task: {task.task_type.value}")
+        logger.info(f" Created first task: {task.task_type.value}")
         return state
 
     async def _monitor_and_decide(self, state: AgentState) -> AgentState:
@@ -100,7 +114,18 @@ class ManagerAgent(BaseAgent):
         next_task = None
 
         # Workflow logic
-        if TaskType.CRAWL_WEB in completed_types and TaskType.DOWNLOAD_PDF not in completed_types:
+        # Nếu search PDF by keywords completed, chuyển sang extract content
+        if TaskType.SEARCH_PDF_BY_KEYWORDS in completed_types and TaskType.EXTRACT_CONTENT not in completed_types:
+            if not task_already_created(TaskType.EXTRACT_CONTENT):
+                pdf_path = state.get('pdf_local_path')
+                if pdf_path:
+                    next_task = self.create_task(
+                        task_type=TaskType.EXTRACT_CONTENT.value,
+                        input_data={'pdf_path': pdf_path}
+                    )
+                    logger.info("📄 Next: Extract PDF content (from keyword search)")
+
+        elif TaskType.CRAWL_WEB in completed_types and TaskType.DOWNLOAD_PDF not in completed_types:
             if not task_already_created(TaskType.DOWNLOAD_PDF):
                 pdf_links = state.get('pdf_document', {})
                 if pdf_links:
@@ -108,7 +133,7 @@ class ManagerAgent(BaseAgent):
                         task_type=TaskType.DOWNLOAD_PDF.value,
                         input_data={'pdf_links': pdf_links}
                     )
-                    logger.info("📥 Next: Download PDF")
+                    logger.info(" Next: Download PDF")
 
         elif TaskType.DOWNLOAD_PDF in completed_types and TaskType.EXTRACT_CONTENT not in completed_types:
             if not task_already_created(TaskType.EXTRACT_CONTENT):
@@ -118,7 +143,7 @@ class ManagerAgent(BaseAgent):
                         task_type=TaskType.EXTRACT_CONTENT.value,
                         input_data={'pdf_path': pdf_path}
                     )
-                    logger.info("📄 Next: Extract PDF content")
+                    logger.info(" Next: Extract PDF content")
 
         elif TaskType.EXTRACT_CONTENT in completed_types and TaskType.SEARCH_OPINIONS not in completed_types:
             if not task_already_created(TaskType.SEARCH_OPINIONS):
@@ -128,7 +153,7 @@ class ManagerAgent(BaseAgent):
                         task_type=TaskType.SEARCH_OPINIONS.value,
                         input_data={'keywords': keywords}
                     )
-                    logger.info("🔍 Next: Search for opinions")
+                    logger.info(" Next: Search for opinions")
 
         # Check if we just completed a SCRAPE_ARTICLES task - handle this FIRST
         if current_task.task_type == TaskType.SCRAPE_ARTICLES and current_task.status.value == 'completed':
@@ -136,8 +161,8 @@ class ManagerAgent(BaseAgent):
             # Just log the completion
             analyzed_articles = state.get('analyzed_articles', [])
             new_articles = getattr(current_task, 'output_data', {}).get('articles', [])
-            logger.info(f"📰 Scrape task completed: {len(new_articles)} new articles in this batch")
-            logger.info(f"📊 Total articles in state: {len(analyzed_articles)}")
+            logger.info(f" Scrape task completed: {len(new_articles)} new articles in this batch")
+            logger.info(f" Total articles in state: {len(analyzed_articles)}")
 
         # Check if a scrape task already exists
         scrape_task_exists = any(t.task_type == TaskType.SCRAPE_ARTICLES for t in task_history) or \
@@ -151,31 +176,31 @@ class ManagerAgent(BaseAgent):
                 not state.get('scrape_articles_done', False) and \
                 not scrape_task_exists:
             search_results = state.get('search_results', [])
-            logger.info(f"🔎 Have {len(search_results)} search results to process")
+            logger.info(f" Have {len(search_results)} search results to process")
             if search_results:
                 # Lọc URLs đã scrape
                 processed_urls = state.get('processed_urls', set())
                 urls_to_scrape = [r['url'] for r in search_results if r['url'] not in processed_urls]
                 if urls_to_scrape:
-                    logger.info(f"📰 Creating scrape task for {len(urls_to_scrape)} URLs")
+                    logger.info(f" Creating scrape task for {len(urls_to_scrape)} URLs")
                     next_task = self.create_task(
                         task_type=TaskType.SCRAPE_ARTICLES.value,
                         input_data={'urls_to_scrape': urls_to_scrape}
                     )
-                    logger.info(f"📰 Next: Scrape articles and analyze sentiment (next_task={next_task is not None})")
+                    logger.info(f" Next: Scrape articles and analyze sentiment (next_task={next_task is not None})")
                 else:
                     # No new URLs to scrape, mark as done
-                    logger.info("📰 All URLs already processed, marking scrape as done")
+                    logger.info(" All URLs already processed, marking scrape as done")
                     state['scrape_articles_done'] = True
             else:
                 # No search results at all
-                logger.info("📰 No search results found, marking scrape as done")
+                logger.info(" No search results found, marking scrape as done")
                 state['scrape_articles_done'] = True
 
         # Check if we should move to export - only if scrape is truly done
         # IMPORTANT: Only move to export when scrape_articles_done = True
         scrape_is_done = state.get('scrape_articles_done', False)
-        logger.info(f"🔍 Checking export: scrape_is_done={scrape_is_done}, next_task={next_task is not None}")
+        logger.info(f" Checking export: scrape_is_done={scrape_is_done}, next_task={next_task is not None}")
 
         # Only consider moving to export if scrape is actually marked as done
         if scrape_is_done and TaskType.EXPORT_DATA not in completed_types:
@@ -186,14 +211,14 @@ class ManagerAgent(BaseAgent):
                         task_type=TaskType.EXPORT_DATA.value,
                         input_data={'analyzed_articles': analyzed_articles}
                     )
-                    logger.info("💾 Next: Export to CSV")
+                    logger.info(" Next: Export to CSV")
                 else:
                     # No articles to export, mark workflow as complete
-                    logger.info("⚠️ No articles found to export, completing workflow")
+                    logger.info(" No articles found to export, completing workflow")
                     state['is_complete'] = True
 
         elif TaskType.EXPORT_DATA in completed_types:
-            logger.info("✅ Workflow completed successfully!")
+            logger.info(" Workflow completed successfully!")
             state['is_complete'] = True
             return state
 
@@ -212,7 +237,7 @@ class ManagerAgent(BaseAgent):
                 # If scrape is done but no export task was created, check if we have articles to export
                 analyzed_articles = state.get('analyzed_articles', [])
                 if analyzed_articles and TaskType.EXPORT_DATA not in completed_types:
-                    logger.warning("⚠️ Scrape completed with articles but export not created. Creating export task.")
+                    logger.warning(" Scrape completed with articles but export not created. Creating export task.")
                     next_task = self.create_task(
                         task_type=TaskType.EXPORT_DATA.value,
                         input_data={'analyzed_articles': analyzed_articles}
@@ -221,7 +246,7 @@ class ManagerAgent(BaseAgent):
                     from core.types import update_state_task
                     state = update_state_task(state, next_task)
                 else:
-                    logger.warning("⚠️ Scrape task completed but no articles found. Marking workflow complete.")
+                    logger.warning("️ Scrape task completed but no articles found. Marking workflow complete.")
                     state['is_complete'] = True
             else:
                 logger.info("  No new task to create, workflow continues with current task")

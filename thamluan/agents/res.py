@@ -24,7 +24,7 @@ class SearchAgent(BaseAgent):
 
     async def execute(self, state: AgentState) -> AgentState:
         try:
-            logger.info(f"🔍 {self.name} executing...")
+            logger.info(f" {self.name} executing...")
 
             current_task = state.get('current_task')
             if not current_task or current_task.task_type != TaskType.SEARCH_OPINIONS:
@@ -51,13 +51,13 @@ class SearchAgent(BaseAgent):
 
             # Search ONLY on Vietnamese trusted news sites (no Google)
             # Faster and more reliable than Google search
-            logger.info("🔍 Searching directly on Vietnamese trusted news sites...")
+            logger.info(" Searching directly on Vietnamese trusted news sites...")
             try:
                 from tools.direct_news_search import direct_news_search_tool
 
                 # Use multiple queries for better coverage
                 for idx, query in enumerate(search_queries[:5], 1):
-                    logger.info(f"📰 Query {idx}/5: '{query}'")
+                    logger.info(f" Query {idx}/5: '{query}'")
                     result = direct_news_search_tool.search_all_sites(
                         query,
                         max_results_per_site=5  # Get more results from each site
@@ -69,10 +69,10 @@ class SearchAgent(BaseAgent):
 
                     # Stop if we already have plenty of results
                     if len(search_results) >= 30:
-                        logger.info(f"✅ Got enough results ({len(search_results)}), stopping search")
+                        logger.info(f" Got enough results ({len(search_results)}), stopping search")
                         break
 
-                logger.info(f"📊 Total found: {len(search_results)} articles from Vietnamese news sites")
+                logger.info(f" Total found: {len(search_results)} articles from Vietnamese news sites")
             except Exception as e:
                 logger.warning(f"Direct news search failed: {str(e)}")
 
@@ -103,7 +103,7 @@ class SearchAgent(BaseAgent):
                 seen_urls.add(url)
                 unique_results.append(result)
 
-            logger.info(f"📊 After validation: {len(unique_results)} unique valid URLs")
+            logger.info(f" After validation: {len(unique_results)} unique valid URLs")
 
             # Step 2: Keyword matching score for better relevance
             important_keywords = []
@@ -154,8 +154,8 @@ class SearchAgent(BaseAgent):
             avg_score = sum(r.get('relevance_score', 0) for r in final_results) / len(
                 final_results) if final_results else 0
             logger.info(
-                f"📊 Final selection: {len(trusted_results[:25])} trusted, {len(other_results[:10])} other sources")
-            logger.info(f"📊 Average relevance score: {avg_score:.1f}")
+                f" Final selection: {len(trusted_results[:25])} trusted, {len(other_results[:10])} other sources")
+            logger.info(f" Average relevance score: {avg_score:.1f}")
 
             task = self.complete_task(current_task, {
                 'search_queries': search_queries,
@@ -269,8 +269,8 @@ class ArticleAnalyzerAgent(BaseAgent):
                     'scrape_articles_done': True
                 })
 
-                logger.info(f"✅ Analyzed {len(analyzed_articles_new)} articles with sentiment")
-                logger.info(f"📊 Total analyzed articles in state: {len(analyzed_articles)}")
+                logger.info(f" Analyzed {len(analyzed_articles_new)} articles with sentiment")
+                logger.info(f" Total analyzed articles in state: {len(analyzed_articles)}")
             else:
                 task = self.complete_task(current_task, {}, error=scrape_result.error)
                 # Still mark as done even on error to prevent infinite loop
@@ -323,7 +323,7 @@ class ExporterAgent(BaseAgent):
                 return state
 
             articles = state.get('analyzed_articles', [])
-            logger.info(f"📊 ExporterAgent found {len(articles)} articles in state")
+            logger.info(f" ExporterAgent found {len(articles)} articles in state")
             if not articles:
                 task = self.complete_task(current_task, {}, error="No articles found to export")
                 state = self.update_state(state, {'current_task': task, 'is_complete': True})
@@ -340,7 +340,7 @@ class ExporterAgent(BaseAgent):
                 state = self.update_state(state, {'current_task': task, 'is_complete': True})
                 return self.log_error(state, export_result.error)
             csv_path = export_result.data['filepath']
-            logger.info(f"✅ Exported {len(articles)} articles to {csv_path}")
+            logger.info(f" Exported {len(articles)} articles to {csv_path}")
 
             # Khởi tạo embedding model nếu chưa có
             if self.embedding_model is None:
@@ -380,7 +380,7 @@ class ExporterAgent(BaseAgent):
                         similarity_threshold=0.95  # tránh trùng vector
                     )
                     if result.success:
-                        logger.info(f"✅ Successfully added articles to Vector DB")
+                        logger.info(f" Successfully added articles to Vector DB")
                     else:
                         logger.error(f"VectorDB error: {result.error}")
             else:
@@ -399,7 +399,7 @@ class ExporterAgent(BaseAgent):
                 'export_loop_count': export_loop_count + 1
             })
 
-            logger.info(f"🎉 Workflow completed: {len(articles)} articles exported to {csv_path}")
+            logger.info(f" Workflow completed: {len(articles)} articles exported to {csv_path}")
             return state
 
         except Exception as e:

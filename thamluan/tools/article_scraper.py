@@ -100,7 +100,7 @@ class ArticleScraperTool:
                 source=source, author=author, summary=summary
             )
 
-            logger.info(f"✅ Scraped article: {title[:50]}... ({len(content)} chars)")
+            logger.info(f" Scraped article: {title[:50]}... ({len(content)} chars)")
             return ToolResult(success=True, data={'article': article})
 
         except Exception as e:
@@ -143,7 +143,7 @@ class ArticleScraperTool:
                 if i < len(urls):
                     time.sleep(config.RETRY_DELAY)
 
-            logger.info(f"✅ Scraped {len(articles)} articles ({failed} failed)")
+            logger.info(f" Scraped {len(articles)} articles ({failed} failed)")
             return ToolResult(success=True, data={'articles': articles, 'count': len(articles), 'failed': failed})
 
         except Exception as e:
