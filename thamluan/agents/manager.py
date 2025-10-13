@@ -138,23 +138,19 @@ class ManagerAgent(BaseAgent):
                 processed_urls = state.get('processed_urls', set())
                 urls_to_scrape = [r['url'] for r in search_results if r['url'] not in processed_urls]
                 if urls_to_scrape:
+                    # Đánh dấu sẽ thực hiện scrape để tránh loop nếu không thêm task mới
+                    state['scrape_articles_done'] = False
                     next_task = self.create_task(
                         task_type=TaskType.SCRAPE_ARTICLES.value,
                         input_data={'urls_to_scrape': urls_to_scrape}
                     )
                     logger.info("📰 Next: Scrape articles and analyze sentiment")
 
-        # Nếu task SCRAPE_ARTICLES vừa hoàn thành
+        # Nếu task SCRAPE_ARTICLES vừa hoàn thành, đánh dấu done và lên lịch export ngay nếu có dữ liệu
         if current_task.task_type == TaskType.SCRAPE_ARTICLES and current_task.status.value == 'completed':
-            analyzed_articles = state.get('analyzed_articles', [])
-            new_articles = getattr(current_task, 'output_data', {}).get('articles', [])
-            analyzed_articles.extend(new_articles)
-            state['analyzed_articles'] = analyzed_articles
             state['scrape_articles_done'] = True
-            logger.info(f"📰 Scrape completed: {len(new_articles)} new articles added")
-
-        elif TaskType.SCRAPE_ARTICLES in completed_types and TaskType.EXPORT_DATA not in completed_types:
-            if not task_already_created(TaskType.EXPORT_DATA):
+            logger.info("📰 Scrape task completed and flagged as done")
+            if TaskType.EXPORT_DATA not in completed_types and not task_already_created(TaskType.EXPORT_DATA):
                 analyzed_articles = state.get('analyzed_articles', [])
                 if analyzed_articles:
                     next_task = self.create_task(

@@ -81,6 +81,15 @@ class VectorDBTool:
             filtered_metas = []
             filtered_ids = []
 
+            # Build a set of existing IDs to avoid duplicate-ID adds
+            try:
+                existing_ids_resp = collection.get(include=["ids"]) or {}
+                existing_ids_list = existing_ids_resp.get('ids', [])
+                # 'get' returns a flat list of ids
+                existing_ids = set(existing_ids_list)
+            except Exception:
+                existing_ids = set()
+
             for i, emb in enumerate(embeddings):
                 skip = False
                 if existing_embeddings.size > 0:
@@ -90,10 +99,14 @@ class VectorDBTool:
                         skip = True
                 if skip:
                     continue
+                candidate_id = ids[i] if ids else f"doc_{uuid.uuid4().hex}"
+                if candidate_id in existing_ids:
+                    logger.debug(f"[VectorDB] Skipping existing id: {candidate_id}")
+                    continue
                 filtered_docs.append(documents[i])
                 filtered_embeddings.append(emb)
                 filtered_metas.append(metadatas[i] if metadatas else {})
-                filtered_ids.append(ids[i] if ids else f"doc_{uuid.uuid4().hex}")
+                filtered_ids.append(candidate_id)
 
             if not filtered_docs:
                 return ToolResult(success=True, data={'added_count': 0, 'collection_name': full_name})

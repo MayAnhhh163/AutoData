@@ -4,9 +4,10 @@ import uuid
 import numpy as np
 from textblob import TextBlob
 from datetime import datetime
+from sentence_transformers import SentenceTransformer
 
 from agents.base import BaseAgent
-from core.types import AgentState, AgentRole, TaskType
+from core.types import AgentState, AgentRole, TaskType, TaskStatus
 from tools import search_engine_tool, text_analyzer_tool, csv_exporter_tool, vector_db_tool
 
 logger = logging.getLogger(__name__)
@@ -27,7 +28,12 @@ class SearchAgent(BaseAgent):
             logger.info(f"🔍 {self.name} executing...")
 
             current_task = state.get('current_task')
-            if not current_task or current_task.task_type != TaskType.SEARCH_OPINIONS:
+            # Only run when this agent owns a PENDING task
+            if (
+                not current_task
+                or current_task.task_type != TaskType.SEARCH_OPINIONS
+                or current_task.status != TaskStatus.PENDING
+            ):
                 return state
 
             extracted_keywords = state.get('extracted_keywords')
@@ -119,7 +125,12 @@ class ArticleAnalyzerAgent(BaseAgent):
                 return state
 
             current_task = state.get('current_task')
-            if not current_task or current_task.task_type != TaskType.SCRAPE_ARTICLES:
+            # Only run when this agent owns a PENDING task
+            if (
+                not current_task
+                or current_task.task_type != TaskType.SCRAPE_ARTICLES
+                or current_task.status != TaskStatus.PENDING
+            ):
                 return state
 
             urls_to_scrape = current_task.input_data.get('urls_to_scrape', [])
@@ -179,7 +190,12 @@ class ExporterAgent(BaseAgent):
                 return state
 
             current_task = state.get('current_task')
-            if not current_task or current_task.task_type != TaskType.EXPORT_DATA:
+            # Only run when this agent owns a PENDING task
+            if (
+                not current_task
+                or current_task.task_type != TaskType.EXPORT_DATA
+                or current_task.status != TaskStatus.PENDING
+            ):
                 return state
 
             articles = state.get('analyzed_articles', [])

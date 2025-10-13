@@ -6,7 +6,7 @@ import logging
 from typing import Dict, Any
 from langgraph.graph import StateGraph, END
 
-from core.types import AgentState, TaskType, create_initial_state
+from core.types import AgentState, TaskType, TaskStatus, create_initial_state
 from agents import (
     manager_agent,
     web_crawler_agent,
@@ -37,6 +37,10 @@ def create_workflow() -> StateGraph:
     def route_from_manager(state: AgentState) -> str:
         current_task = state.get('current_task')
         if not current_task or state.get('is_complete'):
+            return END
+
+        # Only route to a node if the current task is still pending
+        if getattr(current_task, 'status', None) != TaskStatus.PENDING:
             return END
 
         task_type = current_task.task_type

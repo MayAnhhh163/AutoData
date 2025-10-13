@@ -82,6 +82,9 @@ class ArticleScraperTool:
 
     def scrape_article(self, url: str, source: str = "") -> ToolResult:
         try:
+            # Skip invalid schemes like tel:, mailto:
+            if not (url.startswith("http://") or url.startswith("https://")):
+                return ToolResult(success=False, error=f"Unsupported URL scheme: {url}")
             logger.info(f"Scraping article: {url}")
             response = self.session.get(url, timeout=config.REQUEST_TIMEOUT)
             response.raise_for_status()
@@ -126,7 +129,13 @@ class ArticleScraperTool:
                     articles.append(result.data['article'])
                     seen_urls.add(url)
                 else:
-                    logger.warning(f"Failed to scrape {url}: {result.error}")
+                    # Deduplicate noisy errors for unsupported schemes
+                    if url.startswith("http"):
+                        logger.warning(f"Failed to scrape {url}: {result.error}")
+                    else:
+                        if url not in self.processed_duplicates:
+                            logger.warning(f"Skipping non-http URL: {url}")
+                            self.processed_duplicates.add(url)
                     failed += 1
 
                 if i < len(urls):
