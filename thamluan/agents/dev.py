@@ -334,3 +334,4 @@ class LegalPDFSearchAgent(BaseAgent):
 web_crawler_agent = WebCrawlerAgent()
 pdf_handler_agent = PDFHandlerAgent()
 content_extractor_agent = ContentExtractorAgent()
+legal_pdf_search_agent = LegalPDFSearchAgent()
