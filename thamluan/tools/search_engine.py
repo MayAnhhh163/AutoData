@@ -4,6 +4,7 @@ Hỗ trợ Google Search và các search engines khác.
 """
 
 import requests
+from bs4 import BeautifulSoup
 from googlesearch import search as google_search
 from typing import List, Dict, Any
 import logging
