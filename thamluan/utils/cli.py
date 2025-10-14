@@ -14,34 +14,39 @@ def parse_arguments() -> Any:
         Parsed arguments
     """
     parser = argparse.ArgumentParser(
-        description="AutoData - AI Agent Crawler System for Vietnamese Law Documents",
+        description="AutoData - AI Article-Based Crawler (No PDF Required)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Run with default URL
+  # Run with default topic
   python main.py
 
-  # Run with custom URL and project name
-  python main.py --url "https://example.com/draft" --project "Luật ABC 2025"
-
-  # Run in async mode
-  python main.py --async
+  # Run with custom topic (KHÔNG CẦN URL!)
+  python main.py --project "Luật Đất đai 2025"
 
   # Show configuration
   python main.py --show-config
+  
+Workflow:
+  1. Tìm tin tức về dự luật
+  2. Crawl nội dung tin tức
+  3. Extract keywords
+  4. Tìm ý kiến công chúng
+  5. Phân tích sentiment
+  6. Export CSV
         """
     )
 
     parser.add_argument(
         '--url',
         type=str,
-        help='Target URL to crawl (default: MST law draft page)'
+        help='[DEPRECATED] URL is no longer required - workflow is article-based'
     )
 
     parser.add_argument(
         '--project',
         type=str,
-        help='Project name for this crawl session'
+        help='Tên dự luật/chủ đề (ví dụ: "Luật Đất đai 2025")'
     )
 
     parser.add_argument(

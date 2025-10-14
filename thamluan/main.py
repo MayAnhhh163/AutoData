@@ -38,17 +38,19 @@ def main():
         logger.error("Configuration validation failed. Please check your setup.")
         return
 
-    # Get target URL and project name
-    target_url = args.url or "https://mst.gov.vn/van-ban-phap-luat/du-thao/2256.htm"
-    project_name = args.project or "Luật Khoa học, công nghệ và đổi mới sáng tạo 2025"
-
-    logger.info(f"Target URL: {target_url}")
-    logger.info(f"Project Name: {project_name}")
+    # Get project name (chủ đề/tên dự luật) - BẮT BUỘC
+    # URL là optional (không cần nữa với article-based workflow)
+    project_name = args.project or input("\n📋 Nhập tên dự luật/chủ đề: ").strip()
+    
+    if not project_name:
+        project_name = "Luật Khoa học, công nghệ và đổi mới sáng tạo 2025"  # Default
+    
+    logger.info(f"Topic/Project: {project_name}")
 
     try:
-        # Run workflow asynchronously
+        # Run workflow asynchronously (không cần URL)
         logger.info("Running workflow asynchronously...")
-        final_state = asyncio.run(run_workflow_async(target_url, project_name))
+        final_state = asyncio.run(run_workflow_async(project_name))
 
         # Display results
         logger.info("=" * 80)
@@ -56,14 +58,18 @@ def main():
         logger.info("=" * 80)
 
         # Show key results
+        news_count = len(final_state.get('news_articles', []))
+        logger.info(f" News Articles Crawled: {news_count}")
+        
+        keywords = final_state.get('extracted_keywords')
+        if keywords:
+            logger.info(f" Keywords Extracted: {len(keywords.main_keywords)}")
+        
+        opinions_count = len(final_state.get('analyzed_articles', []))
+        logger.info(f" Opinion Articles Analyzed: {opinions_count}")
+        
         if final_state.get('csv_output_path'):
             logger.info(f" CSV Output: {final_state['csv_output_path']}")
-
-        if final_state.get('pdf_local_path'):
-            logger.info(f" PDF Downloaded: {final_state['pdf_local_path']}")
-
-        comments_count = len(final_state.get('collected_comments', []))
-        logger.info(f" Comments Collected: {comments_count}")
 
         if final_state.get('vector_db_collection'):
             logger.info(f" Vector DB Collection: {final_state['vector_db_collection']}")

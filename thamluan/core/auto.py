@@ -122,19 +122,24 @@ def create_workflow() -> StateGraph:
     return workflow
 
 
-async def run_workflow_async(target_url: str, project_name: str) -> Dict[str, Any]:
+async def run_workflow_async(project_name: str, target_url: str = None) -> Dict[str, Any]:
     """
-    Chạy workflow bất đồng bộ với target URL và project name.
+    Chạy workflow bất đồng bộ với project name (chủ đề).
+    
+    Args:
+        project_name: Tên dự luật/chủ đề (BẮT BUỘC)
+        target_url: URL tham khảo (KHÔNG BẮT BUỘC, có thể None)
     """
     try:
         logger.info("=" * 80)
-        logger.info("Starting AutoData Workflow (Async)")
+        logger.info("Starting AutoData Workflow (Article-Based)")
         logger.info("=" * 80)
-        logger.info(f"Project: {project_name}")
-        logger.info(f"Target: {target_url}")
+        logger.info(f"Topic/Project: {project_name}")
+        if target_url:
+            logger.info(f"Reference URL: {target_url}")
         logger.info("=" * 80)
 
-        initial_state = create_initial_state(target_url, project_name)
+        initial_state = create_initial_state(project_name, target_url)
         workflow = create_workflow()
         app = workflow.compile(
             checkpointer=None,

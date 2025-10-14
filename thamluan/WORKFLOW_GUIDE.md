@@ -20,23 +20,29 @@ cd thamluan
 python test_new_workflow.py
 ```
 
-### **Option 2: Chạy từ main.py**
+### **Option 2: Chạy từ main.py (KHÔNG CẦN URL!)**
 ```bash
 cd thamluan
 python main.py
 ```
-Nhập thông tin khi được hỏi:
-- **Target URL**: Bất kỳ (có thể để trống hoặc nhập https://mst.gov.vn)
-- **Project Name**: Tên dự luật (ví dụ: "Luật Khoa học, công nghệ và đổi mới sáng tạo 2025")
+Chỉ cần nhập **Tên dự luật/chủ đề** khi được hỏi:
+- ví dụ: `Luật Khoa học, công nghệ và đổi mới sáng tạo 2025`
+- ví dụ: `Luật Đất đai 2025`
+- ví dụ: `Nghị định 68/2025 về trí tuệ nhân tạo`
 
-### **Option 3: Import trong code**
+### **Option 3: Command line với topic**
+```bash
+python main.py --project "Luật Đất đai 2025"
+```
+
+### **Option 4: Import trong code**
 ```python
 from core.auto import run_workflow_async
 import asyncio
 
 async def main():
+    # Chỉ cần topic name - KHÔNG CẦN URL!
     result = await run_workflow_async(
-        target_url="https://mst.gov.vn",  # Optional
         project_name="Luật Khoa học, công nghệ và đổi mới sáng tạo 2025"
     )
     return result

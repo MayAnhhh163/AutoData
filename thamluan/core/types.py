@@ -128,8 +128,8 @@ class AgentState(TypedDict):
     Đây là Local State approach - mỗi node có thể đọc/ghi state.
     """
     # Input ban đầu
-    target_url: str  # URL của trang web cần crawl
-    project_name: str  # Tên dự án để tracking
+    target_url: Optional[str]  # URL reference (optional, không bắt buộc)
+    project_name: str  # Tên dự án/chủ đề (BẮT BUỘC)
 
     # Workflow tracking
     current_task: Optional[Task]
@@ -200,7 +200,7 @@ class ToolResult:
 
 
 # Helper functions
-def create_initial_state(target_url: str, project_name: str) -> AgentState:
+def create_initial_state(project_name: str, target_url: str = None) -> AgentState:
     """Tạo initial state cho workflow"""
     now = datetime.now()
     return AgentState(

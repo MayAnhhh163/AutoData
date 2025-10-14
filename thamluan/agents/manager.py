@@ -56,11 +56,14 @@ class ManagerAgent(BaseAgent):
         """
         logger.info("Starting new workflow (article-based)...")
 
-        target_url = state['target_url']
+        target_url = state.get('target_url')
         project_name = state['project_name']
 
-        logger.info(f"Project: {project_name}")
-        logger.info(f"Target URL (optional): {target_url}")
+        logger.info(f"Project/Topic: {project_name}")
+        if target_url:
+            logger.info(f"Reference URL: {target_url}")
+        else:
+            logger.info("Reference URL: Not provided (not required)")
 
         # Start with searching for news articles about the law
         task = self.create_task(

@@ -15,21 +15,17 @@ async def test_workflow():
     """Test workflow mới với article-based approach"""
     
     print("=" * 80)
-    print("TESTING NEW WORKFLOW (Article-Based, No PDF)")
+    print("TESTING NEW WORKFLOW (Article-Based, No URL Required)")
     print("=" * 80)
     
-    # Target URL là optional giờ - chỉ cần project name
-    target_url = "https://mst.gov.vn"  # Optional, có thể bỏ qua
+    # Chỉ cần project name - KHÔNG CẦN URL!
     project_name = "Luật Khoa học, công nghệ và đổi mới sáng tạo 2025"
     
-    print(f"\n📋 Project: {project_name}")
-    print(f"🔗 Reference URL: {target_url}\n")
+    print(f"\n📋 Topic: {project_name}")
+    print("🔗 URL: Not required!\n")
     
     try:
-        result = await run_workflow_async(
-            target_url=target_url,
-            project_name=project_name
-        )
+        result = await run_workflow_async(project_name)
         
         print("\n" + "=" * 80)
         print("✅ WORKFLOW COMPLETED SUCCESSFULLY!")
