@@ -100,7 +100,7 @@ class ArticleScraperTool:
                 source=source, author=author, summary=summary
             )
 
-            logger.info(f"✅ Scraped article: {title[:50]}... ({len(content)} chars)")
+            logger.info(f" Scraped article: {title[:50]}... ({len(content)} chars)")
             return ToolResult(success=True, data={'article': article})
 
         except Exception as e:
@@ -113,13 +113,13 @@ class ArticleScraperTool:
             return False
         return url.startswith('http://') or url.startswith('https://')
     
+
     def scrape_multiple_articles(self, urls: List[str], existing_urls: set = None) -> ToolResult:
         try:
             existing_urls = existing_urls or set()
             articles = []
             failed = 0
             seen_urls = set(existing_urls)
-
             for i, url in enumerate(urls, 1):
                 # Skip invalid URLs (tel:, mailto:, etc.)
                 if not self._is_valid_url(url):
@@ -127,6 +127,7 @@ class ArticleScraperTool:
                     failed += 1
                     continue
                 
+
                 if url in seen_urls:
                     if url not in self.processed_duplicates:
                         logger.warning(f"Skipping duplicate URL: {url}")
@@ -144,7 +145,7 @@ class ArticleScraperTool:
                 if i < len(urls):
                     time.sleep(config.RETRY_DELAY)
 
-            logger.info(f"✅ Scraped {len(articles)} articles ({failed} failed)")
+            logger.info(f" Scraped {len(articles)} articles ({failed} failed)")
             return ToolResult(success=True, data={'articles': articles, 'count': len(articles), 'failed': failed})
 
         except Exception as e:

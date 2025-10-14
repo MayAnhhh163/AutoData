@@ -34,6 +34,7 @@ class TextAnalyzerTool:
         try:
             queries = []
             
+
             # Lấy top keywords từ PDF
             top_keywords = []
             if keywords:
@@ -43,6 +44,7 @@ class TextAnalyzerTool:
                 if len(top_keywords) < 3 and keywords.main_keywords:
                     top_keywords.extend(keywords.main_keywords[:3])
             
+
             # Strategy 1: Base topic với opinion keywords
             if base_topic:
                 opinion_patterns = [
@@ -53,6 +55,7 @@ class TextAnalyzerTool:
                 ]
                 queries.extend(opinion_patterns[:3])
             
+
             # Strategy 2: Combine keywords với base topic để tìm nội dung cụ thể hơn
             if top_keywords and base_topic:
                 for kw in top_keywords[:3]:
@@ -61,6 +64,7 @@ class TextAnalyzerTool:
                         continue
                     queries.append(f"{base_topic} {kw}")
             
+
             # Strategy 3: Nếu không có keywords, dùng các pattern chung
             if not queries:
                 queries.extend([
@@ -69,6 +73,7 @@ class TextAnalyzerTool:
                     f"phản hồi về {base_topic}",
                 ])
             
+
             # Xóa trùng lặp và clean up
             unique_queries = []
             seen = set()
@@ -81,6 +86,10 @@ class TextAnalyzerTool:
             # Limit to reasonable number
             final_queries = unique_queries[:8]
             
+
+            # Limit to reasonable number
+            final_queries = unique_queries[:8]
+
             logger.info(f"Generated {len(final_queries)} optimized search queries")
             logger.info(f"Sample queries: {final_queries[:3]}")
 

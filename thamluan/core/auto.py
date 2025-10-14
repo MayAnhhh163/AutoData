@@ -19,6 +19,7 @@ from agents import (
     nlp_analysis_agent,
     hybrid_exporter_agent,
     # Article-based workflow agents
+    # New workflow agents
     news_search_agent,
     news_scraper_agent,
     keyword_extractor_agent,
@@ -27,6 +28,7 @@ from agents import (
     pdf_handler_agent,
     content_extractor_agent,
     # Opinion search agents (legacy)
+    # Opinion search agents
     search_agent,
     article_analyzer_agent,
     exporter_agent
@@ -63,6 +65,18 @@ def create_workflow() -> StateGraph:
     workflow.add_node("content_extractor", content_extractor_agent.execute)
     
     # Opinion search nodes (legacy)
+
+    # New workflow nodes (article-based)
+    workflow.add_node("news_search_agent", news_search_agent.execute)
+    workflow.add_node("news_scraper_agent", news_scraper_agent.execute)
+    workflow.add_node("keyword_extractor_agent", keyword_extractor_agent.execute)
+
+    # Old PDF workflow nodes (kept for compatibility)
+    workflow.add_node("web_crawler", web_crawler_agent.execute)
+    workflow.add_node("pdf_handler", pdf_handler_agent.execute)
+    workflow.add_node("content_extractor", content_extractor_agent.execute)
+
+    # Opinion search nodes (common to both workflows)
     workflow.add_node("search_agent", search_agent.execute)
     workflow.add_node("article_analyzer", article_analyzer_agent.execute)
     workflow.add_node("exporter_agent", exporter_agent.execute)
@@ -73,10 +87,10 @@ def create_workflow() -> StateGraph:
         is_complete = state.get('is_complete', False)
 
         logger.info(
-            f"🔀 Routing: current_task={current_task.task_type.value if current_task else 'None'}, is_complete={is_complete}")
+            f" Routing: current_task={current_task.task_type.value if current_task else 'None'}, is_complete={is_complete}")
 
         if not current_task:
-            logger.info("❌ No current task, ending workflow")
+            logger.info(" No current task, ending workflow")
             return END
 
         if is_complete:
@@ -103,6 +117,16 @@ def create_workflow() -> StateGraph:
             TaskType.DOWNLOAD_PDF: "pdf_handler",
             TaskType.EXTRACT_CONTENT: "content_extractor",
             # Legacy opinion routing
+            # New workflow routing
+            TaskType.SEARCH_NEWS: "news_search_agent",
+            TaskType.SCRAPE_NEWS_ARTICLES: "news_scraper_agent",
+            TaskType.EXTRACT_KEYWORDS_FROM_NEWS: "keyword_extractor_agent",
+            # Old PDF workflow routing
+            TaskType.CRAWL_WEB: "web_crawler",
+            TaskType.DOWNLOAD_PDF: "pdf_handler",
+            TaskType.EXTRACT_CONTENT: "content_extractor",
+            # Opinion search routing (common)
+            TaskType.SEARCH_OPINIONS: "search_agent",
             TaskType.SCRAPE_ARTICLES: "article_analyzer",
         }.get(task_type, END)
 
@@ -141,6 +165,15 @@ def create_workflow() -> StateGraph:
             "pdf_handler": "pdf_handler",
             "content_extractor": "content_extractor",
             # Legacy edges
+            # New workflow edges
+            "news_search_agent": "news_search_agent",
+            "news_scraper_agent": "news_scraper_agent",
+            "keyword_extractor_agent": "keyword_extractor_agent",
+            # Old PDF workflow edges
+            "web_crawler": "web_crawler",
+            "pdf_handler": "pdf_handler",
+            "content_extractor": "content_extractor",
+            # Opinion search edges
             "search_agent": "search_agent",
             "article_analyzer": "article_analyzer",
             "exporter_agent": "exporter_agent",
@@ -162,6 +195,9 @@ def create_workflow() -> StateGraph:
     ]
     
     for node in all_nodes:
+    for node in ["news_search_agent", "news_scraper_agent", "keyword_extractor_agent",
+                 "web_crawler", "pdf_handler", "content_extractor",
+                 "search_agent", "article_analyzer", "exporter_agent"]:
         workflow.add_conditional_edges(node, should_continue)
 
     return workflow
@@ -171,6 +207,7 @@ async def run_workflow_async(project_name: str, target_url: str = None) -> Dict[
     """
     Chạy workflow bất đồng bộ với project name (chủ đề).
     
+
     Args:
         project_name: Tên dự luật/chủ đề (BẮT BUỘC)
         target_url: URL tham khảo (KHÔNG BẮT BUỘC, có thể None)
@@ -195,7 +232,7 @@ async def run_workflow_async(project_name: str, target_url: str = None) -> Dict[
         # Configure with higher recursion limit
         config = {"recursion_limit": 100}
 
-        logger.info("🚀 Executing workflow asynchronously...")
+        logger.info(" Executing workflow asynchronously...")
         final_state = await app.ainvoke(initial_state, config=config)
 
         report = manager_agent.generate_report(final_state)

@@ -306,6 +306,5 @@ class DirectNewsSearchTool:
                 continue
         return results
 
-
 # Singleton instance
 direct_news_search_tool = DirectNewsSearchTool()

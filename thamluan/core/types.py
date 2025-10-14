@@ -51,6 +51,21 @@ class TaskType(str, Enum):
     EXTRACT_CONTENT = "extract_content"
     SCRAPE_COMMENTS = "scrape_comments"
     SCRAPE_ARTICLES = "scrape_articles"
+    # New workflow (article-based, no PDF)
+    SEARCH_NEWS = "search_news"  # Tìm tin tức về dự luật
+    SCRAPE_NEWS_ARTICLES = "scrape_news_articles"  # Scrape nội dung tin tức
+    EXTRACT_KEYWORDS_FROM_NEWS = "extract_keywords_from_news"  # Extract keywords từ tin tức
+
+    # Old PDF workflow (kept for compatibility)
+    CRAWL_WEB = "crawl_web"
+    DOWNLOAD_PDF = "download_pdf"
+    EXTRACT_CONTENT = "extract_content"
+
+    # Opinion gathering (common to both workflows)
+    SEARCH_OPINIONS = "search_opinions"
+    SCRAPE_COMMENTS = "scrape_comments"  # Kept for backward compatibility
+    SCRAPE_ARTICLES = "scrape_articles"  # Scrape opinion articles
+    EXPORT_DATA = "export_data"
 
 
 @dataclass
@@ -169,6 +184,15 @@ class AgentState(TypedDict):
     scrape_loop_count: int  # Counter to prevent infinite loops
     export_loop_count: int  # Counter for export operations
 
+    # Article scraping and analysis
+    news_articles: Annotated[List[Dict[str, Any]], "Initial news articles about the law"]
+    analyzed_articles: Annotated[List[Dict[str, Any]], "Opinion articles with sentiment analysis"]
+    processed_urls: Annotated[set, "URLs that have been scraped"]
+    scrape_articles_done: bool  # Flag to indicate scraping is complete
+    scrape_news_done: bool  # Flag to indicate news scraping is complete
+    scrape_loop_count: int  # Counter to prevent infinite loops
+    export_loop_count: int  # Counter for export operations
+
     # Vector DB tracking
     vector_db_collection: Optional[str]  # Tên collection trong ChromaDB
     embedded_documents: List[str]  # IDs của documents đã embed
@@ -239,6 +263,8 @@ def create_initial_state(project_name: str, target_url: str = None) -> AgentStat
         news_articles=[],
         analyzed_articles=[],
         # Tracking
+        news_articles=[],
+        analyzed_articles=[],
         processed_urls=set(),
         scrape_articles_done=False,
         scrape_news_done=False,

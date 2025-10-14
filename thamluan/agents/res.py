@@ -32,6 +32,7 @@ class NewsSearchAgent(BaseAgent):
 
             topic = current_task.input_data.get('topic', state['project_name'])
             
+
             # Generate search queries for NEWS (not opinions)
             news_queries = [
                 f"{topic}",
@@ -43,6 +44,9 @@ class NewsSearchAgent(BaseAgent):
             
             logger.info(f"🔍 Searching for news about: {topic}")
             
+
+            logger.info(f"🔍 Searching for news about: {topic}")
+
             search_results = []
             try:
                 from tools.direct_news_search import direct_news_search_tool
@@ -92,6 +96,7 @@ class NewsSearchAgent(BaseAgent):
                 'current_task': task,
                 'search_queries': news_queries,
                 'search_results': unique_results[:30]  # Top 30
+                'search_results': unique_results[:10]  # Top 10
             })
 
             return state
@@ -137,6 +142,7 @@ class NewsScraperAgent(BaseAgent):
                 articles = scrape_result.data['articles']
                 articles_dict = [a.to_dict() for a in articles]
                 
+
                 logger.info(f"✅ Scraped {len(articles_dict)} news articles")
 
                 task = self.complete_task(current_task, {
@@ -191,11 +197,16 @@ class KeywordExtractorAgent(BaseAgent):
                 for art in news_articles
             ])
             
+                f"{art.get('title', '')} {art.get('content', '')}"
+                for art in news_articles
+            ])
+
             logger.info(f"📝 Extracting keywords from {len(news_articles)} news articles ({len(all_content)} chars)")
 
             # Extract keywords using existing tool
             from tools.pdf_extractor import pdf_extractor_tool
             
+
             # Extract keywords
             keywords_result = pdf_extractor_tool.extract_keywords(all_content, max_keywords=50)
             # Extract key phrases
@@ -205,6 +216,7 @@ class KeywordExtractorAgent(BaseAgent):
                 keywords = keywords_result.data.get('keywords', [])
                 key_phrases = phrases_result.data.get('key_phrases', [])
                 
+
                 extracted_keywords = ExtractedKeywords(
                     main_keywords=keywords[:20],
                     key_phrases=key_phrases[:20],
@@ -251,7 +263,7 @@ class SearchAgent(BaseAgent):
 
     async def execute(self, state: AgentState) -> AgentState:
         try:
-            logger.info(f"🔍 {self.name} executing...")
+            logger.info(f" {self.name} executing...")
 
             current_task = state.get('current_task')
             if not current_task or current_task.task_type != TaskType.SEARCH_OPINIONS:
@@ -278,13 +290,13 @@ class SearchAgent(BaseAgent):
 
             # Search ONLY on Vietnamese trusted news sites (no Google)
             # Faster and more reliable than Google search
-            logger.info("🔍 Searching directly on Vietnamese trusted news sites...")
+            logger.info(" Searching directly on Vietnamese trusted news sites...")
             try:
                 from tools.direct_news_search import direct_news_search_tool
 
                 # Use multiple queries for better coverage
                 for idx, query in enumerate(search_queries[:5], 1):
-                    logger.info(f"📰 Query {idx}/5: '{query}'")
+                    logger.info(f" Query {idx}/5: '{query}'")
                     result = direct_news_search_tool.search_all_sites(
                         query,
                         max_results_per_site=5  # Get more results from each site
@@ -296,10 +308,10 @@ class SearchAgent(BaseAgent):
 
                     # Stop if we already have plenty of results
                     if len(search_results) >= 30:
-                        logger.info(f"✅ Got enough results ({len(search_results)}), stopping search")
+                        logger.info(f" Got enough results ({len(search_results)}), stopping search")
                         break
 
-                logger.info(f"📊 Total found: {len(search_results)} articles from Vietnamese news sites")
+                logger.info(f" Total found: {len(search_results)} articles from Vietnamese news sites")
             except Exception as e:
                 logger.warning(f"Direct news search failed: {str(e)}")
 
@@ -326,6 +338,10 @@ class SearchAgent(BaseAgent):
                     if not any(indicator in url.lower() for indicator in ['-', 'tin-tuc', 'bai-viet', 'news', 'article', '.htm']):
                         continue
                 
+                    if not any(indicator in url.lower() for indicator in
+                               ['-', 'tin-tuc', 'bai-viet', 'news', 'article', '.htm']):
+                        continue
+
                 seen_urls.add(url)
                 unique_results.append(result)
 
@@ -338,12 +354,16 @@ class SearchAgent(BaseAgent):
                                    (extracted_keywords.main_keywords[:5] if extracted_keywords.main_keywords else [])
                 important_keywords = [kw.lower() for kw in important_keywords if len(kw) > 3]
             
+                                     (extracted_keywords.main_keywords[:5] if extracted_keywords.main_keywords else [])
+                important_keywords = [kw.lower() for kw in important_keywords if len(kw) > 3]
+
             def calculate_relevance_score(result):
                 """Calculate relevance based on keyword matching"""
                 title = result.get('title', '').lower()
                 snippet = result.get('snippet', '').lower()
                 combined_text = title + ' ' + snippet
                 
+
                 score = 0
                 # Title matches worth more
                 for kw in important_keywords:
@@ -352,6 +372,7 @@ class SearchAgent(BaseAgent):
                     elif kw in snippet:
                         score += 1
                 
+
                 # Bonus for opinion indicators
                 opinion_words = ['ý kiến', 'bình luận', 'phản hồi', 'góp ý', 'thảo luận', 'tranh luận', 'chuyên gia']
                 for word in opinion_words:
@@ -365,6 +386,13 @@ class SearchAgent(BaseAgent):
             for result in unique_results:
                 result['relevance_score'] = calculate_relevance_score(result)
             
+
+                return score
+
+            # Score all results
+            for result in unique_results:
+                result['relevance_score'] = calculate_relevance_score(result)
+
             # Step 3: Prioritize trusted domains + high scores
             from core.config import config
             trusted_results = [r for r in unique_results if any(d in r['url'] for d in config.TRUSTED_DOMAINS)]
@@ -379,6 +407,18 @@ class SearchAgent(BaseAgent):
             
             avg_score = sum(r.get('relevance_score', 0) for r in final_results) / len(final_results) if final_results else 0
             logger.info(f"📊 Final selection: {len(trusted_results[:25])} trusted, {len(other_results[:10])} other sources")
+
+            # Sort both by relevance score
+            trusted_results = sorted(trusted_results, key=lambda x: x.get('relevance_score', 0), reverse=True)
+            other_results = sorted(other_results, key=lambda x: x.get('relevance_score', 0), reverse=True)
+
+            # Combine: trusted first, then high-scoring others
+            final_results = trusted_results[:25] + other_results[:10]  # Total max 35
+
+            avg_score = sum(r.get('relevance_score', 0) for r in final_results) / len(
+                final_results) if final_results else 0
+            logger.info(
+                f"📊 Final selection: {len(trusted_results[:25])} trusted, {len(other_results[:10])} other sources")
             logger.info(f"📊 Average relevance score: {avg_score:.1f}")
 
             task = self.complete_task(current_task, {
@@ -493,8 +533,8 @@ class ArticleAnalyzerAgent(BaseAgent):
                     'scrape_articles_done': True
                 })
 
-                logger.info(f"✅ Analyzed {len(analyzed_articles_new)} articles with sentiment")
-                logger.info(f"📊 Total analyzed articles in state: {len(analyzed_articles)}")
+                logger.info(f" Analyzed {len(analyzed_articles_new)} articles with sentiment")
+                logger.info(f" Total analyzed articles in state: {len(analyzed_articles)}")
             else:
                 task = self.complete_task(current_task, {}, error=scrape_result.error)
                 # Still mark as done even on error to prevent infinite loop
@@ -547,7 +587,7 @@ class ExporterAgent(BaseAgent):
                 return state
 
             articles = state.get('analyzed_articles', [])
-            logger.info(f"📊 ExporterAgent found {len(articles)} articles in state")
+            logger.info(f" ExporterAgent found {len(articles)} articles in state")
             if not articles:
                 task = self.complete_task(current_task, {}, error="No articles found to export")
                 state = self.update_state(state, {'current_task': task, 'is_complete': True})
@@ -565,6 +605,7 @@ class ExporterAgent(BaseAgent):
                 return self.log_error(state, export_result.error)
             csv_path = export_result.data['filepath']
             logger.info(f"✅ Exported {len(articles)} articles to {csv_path}")
+            logger.info(f" Exported {len(articles)} articles to {csv_path}")
 
             # Khởi tạo embedding model nếu chưa có
             if self.embedding_model is None:
@@ -604,7 +645,7 @@ class ExporterAgent(BaseAgent):
                         similarity_threshold=0.95  # tránh trùng vector
                     )
                     if result.success:
-                        logger.info(f"✅ Successfully added articles to Vector DB")
+                        logger.info(f" Successfully added articles to Vector DB")
                     else:
                         logger.error(f"VectorDB error: {result.error}")
             else:
@@ -623,7 +664,7 @@ class ExporterAgent(BaseAgent):
                 'export_loop_count': export_loop_count + 1
             })
 
-            logger.info(f"🎉 Workflow completed: {len(articles)} articles exported to {csv_path}")
+            logger.info(f" Workflow completed: {len(articles)} articles exported to {csv_path}")
             return state
 
         except Exception as e:
@@ -637,6 +678,7 @@ class ExporterAgent(BaseAgent):
                     'export_loop_count': state.get('export_loop_count', 0) + 1
                 })
             return self.log_error(state, f"Export failed: {str(e)}")
+
 
 # Singleton instances
 # New workflow agents

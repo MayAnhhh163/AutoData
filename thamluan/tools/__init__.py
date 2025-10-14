@@ -20,6 +20,7 @@ from .text_analyzer import TextAnalyzerTool
 from .vector_db import VectorDBTool
 from .article_scraper import ArticleScraperTool, article_scraper_tool
 from .sentiment_analyzer import SentimentAnalyzerTool, sentiment_analyzer_tool
+from .legal_pdf_finder import LegalPDFFinderTool, legal_pdf_finder_tool
 
 # Initialize existing tools
 web_crawler_tool = WebCrawlerTool()
@@ -30,3 +31,4 @@ comment_scraper_tool = CommentScraperTool()
 csv_exporter_tool = CSVExporterTool()
 text_analyzer_tool = TextAnalyzerTool()
 vector_db_tool = VectorDBTool()
+legal_pdf_finder_tool = LegalPDFFinderTool()

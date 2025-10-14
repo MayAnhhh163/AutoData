@@ -47,6 +47,10 @@ def main():
     if not project_name:
         project_name = "Luật Khoa học, công nghệ và đổi mới sáng tạo 2025"  # Default
     
+
+    if not project_name:
+        project_name = "Luật Khoa học, công nghệ và đổi mới sáng tạo 2025"  # Default
+
     logger.info(f"Topic/Project: {project_name}")
 
     try:
@@ -91,6 +95,20 @@ def main():
         logger.info(f"\n💾 PHASE 4 - Export:")
         if final_state.get('csv_output_path'):
             logger.info(f"   CSV Output: {final_state['csv_output_path']}")
+        # Show key results
+        news_count = len(final_state.get('news_articles', []))
+        logger.info(f" News Articles Crawled: {news_count}")
+
+        keywords = final_state.get('extracted_keywords')
+        if keywords:
+            logger.info(f" Keywords Extracted: {len(keywords.main_keywords)}")
+
+        opinions_count = len(final_state.get('analyzed_articles', []))
+        logger.info(f" Opinion Articles Analyzed: {opinions_count}")
+
+        if final_state.get('csv_output_path'):
+            logger.info(f" CSV Output: {final_state['csv_output_path']}")
+
         if final_state.get('vector_db_collection'):
             logger.info(f"   Vector DB Collection: {final_state['vector_db_collection']}")
 
