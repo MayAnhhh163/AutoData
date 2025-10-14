@@ -14,40 +14,39 @@ def parse_arguments() -> Any:
         Parsed arguments
     """
     parser = argparse.ArgumentParser(
-        description="AutoData - AI Agent Crawler System for Vietnamese Law Documents",
+        description="AutoData - AI Article-Based Crawler (No PDF Required)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Examples:
-  # Run with keywords (NEW - RECOMMENDED)
-  python main.py --keywords "Luật Khoa học công nghệ 2025"
+    Examples:
+      # Run with default topic
+      python main.py
 
-  # Run with keywords and custom project name
-  python main.py --keywords "Nghị định 123" --project "Nghị định 123/2025"
+      # Run with custom topic (KHÔNG CẦN URL!)
+      python main.py --project "Luật Đất đai 2025"
 
-  # Run with custom URL (old method - still supported)
-  python main.py --url "https://example.com/draft" --project "Luật ABC 2025"
+      # Show configuration
+      python main.py --show-config
 
-  # Show configuration
-  python main.py --show-config
-        """
-    )
-
-    parser.add_argument(
-        '--keywords',
-        type=str,
-        help='Keywords to search for legal documents (e.g., "Luật Khoa học công nghệ 2025")'
+    Workflow:
+      1. Tìm tin tức về dự luật
+      2. Crawl nội dung tin tức
+      3. Extract keywords
+      4. Tìm ý kiến công chúng
+      5. Phân tích sentiment
+      6. Export CSV
+            """
     )
 
     parser.add_argument(
         '--url',
         type=str,
-        help='[DEPRECATED] Target URL to crawl (use --keywords instead for automatic search)'
+        help='[DEPRECATED] URL is no longer required - workflow is article-based'
     )
 
     parser.add_argument(
         '--project',
         type=str,
-        help='Project name for this crawl session (auto-generated from keywords if not provided)'
+        help='Tên dự luật/chủ đề (ví dụ: "Luật Đất đai 2025")'
     )
 
     parser.add_argument(

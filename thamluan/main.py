@@ -38,34 +38,19 @@ def main():
         logger.error("Configuration validation failed. Please check your setup.")
         return
 
-    # Get keywords or URL
-    keywords = args.keywords
-    target_url = args.url
+    # Get project name (chủ đề/tên dự luật) - BẮT BUỘC
+    # URL là optional (không cần nữa với article-based workflow)
+    project_name = args.project or input("\n📋 Nhập tên dự luật/chủ đề: ").strip()
 
-    # Validation: Must have either keywords or URL
-    if not keywords and not target_url:
-        logger.error("❌ You must provide either --keywords or --url")
-        logger.info("Example: python main.py --keywords \"Luật Khoa học công nghệ 2025\"")
-        return
+    if not project_name:
+        project_name = "Luật Khoa học, công nghệ và đổi mới sáng tạo 2025"  # Default
 
-    # Auto-generate project name from keywords if not provided
-    if keywords:
-        project_name = args.project or keywords
-        logger.info(f"🔍 Keywords: {keywords}")
-    else:
-        project_name = args.project or "Legal Document Analysis"
-        logger.info(f"🌐 Target URL: {target_url}")
-
-    logger.info(f"📁 Project Name: {project_name}")
+    logger.info(f"Topic/Project: {project_name}")
 
     try:
-        # Run workflow asynchronously
+        # Run workflow asynchronously (không cần URL)
         logger.info("Running workflow asynchronously...")
-        final_state = asyncio.run(run_workflow_async(
-            project_name=project_name,
-            target_url=target_url,
-            keywords=keywords
-        ))
+        final_state = asyncio.run(run_workflow_async(project_name))
 
         # Display results
         logger.info("=" * 80)
@@ -73,14 +58,18 @@ def main():
         logger.info("=" * 80)
 
         # Show key results
+        news_count = len(final_state.get('news_articles', []))
+        logger.info(f" News Articles Crawled: {news_count}")
+
+        keywords = final_state.get('extracted_keywords')
+        if keywords:
+            logger.info(f" Keywords Extracted: {len(keywords.main_keywords)}")
+
+        opinions_count = len(final_state.get('analyzed_articles', []))
+        logger.info(f" Opinion Articles Analyzed: {opinions_count}")
+
         if final_state.get('csv_output_path'):
             logger.info(f" CSV Output: {final_state['csv_output_path']}")
-
-        if final_state.get('pdf_local_path'):
-            logger.info(f" PDF Downloaded: {final_state['pdf_local_path']}")
-
-        comments_count = len(final_state.get('collected_comments', []))
-        logger.info(f" Comments Collected: {comments_count}")
 
         if final_state.get('vector_db_collection'):
             logger.info(f" Vector DB Collection: {final_state['vector_db_collection']}")

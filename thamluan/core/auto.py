@@ -9,13 +9,18 @@ from langgraph.graph import StateGraph, END
 from core.types import AgentState, TaskType, create_initial_state
 from agents import (
     manager_agent,
+    # New workflow agents
+    news_search_agent,
+    news_scraper_agent,
+    keyword_extractor_agent,
+    # Old PDF workflow agents (kept for compatibility)
     web_crawler_agent,
     pdf_handler_agent,
     content_extractor_agent,
+    # Opinion search agents
     search_agent,
     article_analyzer_agent,
-    exporter_agent,
-    legal_pdf_search_agent
+    exporter_agent
 )
 
 logger = logging.getLogger(__name__)
@@ -27,10 +32,18 @@ def create_workflow() -> StateGraph:
 
     # Nodes
     workflow.add_node("manager", manager_agent.execute)
-    workflow.add_node("legal_pdf_search", legal_pdf_search_agent.execute)
+
+    # New workflow nodes (article-based)
+    workflow.add_node("news_search_agent", news_search_agent.execute)
+    workflow.add_node("news_scraper_agent", news_scraper_agent.execute)
+    workflow.add_node("keyword_extractor_agent", keyword_extractor_agent.execute)
+
+    # Old PDF workflow nodes (kept for compatibility)
     workflow.add_node("web_crawler", web_crawler_agent.execute)
     workflow.add_node("pdf_handler", pdf_handler_agent.execute)
     workflow.add_node("content_extractor", content_extractor_agent.execute)
+
+    # Opinion search nodes (common to both workflows)
     workflow.add_node("search_agent", search_agent.execute)
     workflow.add_node("article_analyzer", article_analyzer_agent.execute)
     workflow.add_node("exporter_agent", exporter_agent.execute)
@@ -53,10 +66,15 @@ def create_workflow() -> StateGraph:
 
         task_type = current_task.task_type
         next_agent = {
-            TaskType.SEARCH_PDF_BY_KEYWORDS: "legal_pdf_search",
+            # New workflow routing
+            TaskType.SEARCH_NEWS: "news_search_agent",
+            TaskType.SCRAPE_NEWS_ARTICLES: "news_scraper_agent",
+            TaskType.EXTRACT_KEYWORDS_FROM_NEWS: "keyword_extractor_agent",
+            # Old PDF workflow routing
             TaskType.CRAWL_WEB: "web_crawler",
             TaskType.DOWNLOAD_PDF: "pdf_handler",
             TaskType.EXTRACT_CONTENT: "content_extractor",
+            # Opinion search routing (common)
             TaskType.SEARCH_OPINIONS: "search_agent",
             TaskType.SCRAPE_ARTICLES: "article_analyzer",
             TaskType.EXPORT_DATA: "exporter_agent"
@@ -79,10 +97,15 @@ def create_workflow() -> StateGraph:
         "manager",
         route_from_manager,
         {
-            "legal_pdf_search": "legal_pdf_search",
+            # New workflow edges
+            "news_search_agent": "news_search_agent",
+            "news_scraper_agent": "news_scraper_agent",
+            "keyword_extractor_agent": "keyword_extractor_agent",
+            # Old PDF workflow edges
             "web_crawler": "web_crawler",
             "pdf_handler": "pdf_handler",
             "content_extractor": "content_extractor",
+            # Opinion search edges
             "search_agent": "search_agent",
             "article_analyzer": "article_analyzer",
             "exporter_agent": "exporter_agent",
@@ -90,29 +113,33 @@ def create_workflow() -> StateGraph:
         }
     )
 
-    for node in ["legal_pdf_search", "web_crawler", "pdf_handler", "content_extractor",
+    # All nodes return to manager after completion
+    for node in ["news_search_agent", "news_scraper_agent", "keyword_extractor_agent",
+                 "web_crawler", "pdf_handler", "content_extractor",
                  "search_agent", "article_analyzer", "exporter_agent"]:
         workflow.add_conditional_edges(node, should_continue)
 
     return workflow
 
 
-async def run_workflow_async(project_name: str, target_url: str = None, keywords: str = None) -> Dict[str, Any]:
+async def run_workflow_async(project_name: str, target_url: str = None) -> Dict[str, Any]:
     """
-    Chạy workflow bất đồng bộ với keywords hoặc target URL.
+    Chạy workflow bất đồng bộ với project name (chủ đề).
+
+    Args:
+        project_name: Tên dự luật/chủ đề (BẮT BUỘC)
+        target_url: URL tham khảo (KHÔNG BẮT BUỘC, có thể None)
     """
     try:
         logger.info("=" * 80)
-        logger.info("Starting AutoData Workflow (Async)")
+        logger.info("Starting AutoData Workflow (Article-Based)")
         logger.info("=" * 80)
-        logger.info(f"Project: {project_name}")
-        if keywords:
-            logger.info(f"Keywords: {keywords}")
+        logger.info(f"Topic/Project: {project_name}")
         if target_url:
-            logger.info(f"Target URL: {target_url}")
+            logger.info(f"Reference URL: {target_url}")
         logger.info("=" * 80)
 
-        initial_state = create_initial_state(project_name, target_url=target_url, keywords=keywords)
+        initial_state = create_initial_state(project_name, target_url)
         workflow = create_workflow()
         app = workflow.compile(
             checkpointer=None,

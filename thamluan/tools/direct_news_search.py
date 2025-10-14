@@ -216,7 +216,7 @@ class DirectNewsSearchTool:
                     results.append({'url': url, 'title': title, 'snippet': snippet, 'source': source})
             except Exception:
                 continue
-            return results
+        return results
 
     def _parse_vietnamnet(self, soup: BeautifulSoup, source: str) -> List[Dict[str, Any]]:
         """Parser cho VietnamNet"""
