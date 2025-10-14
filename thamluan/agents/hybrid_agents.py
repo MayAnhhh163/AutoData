@@ -41,9 +41,10 @@ class LawListSearchAgent(BaseAgent):
             # Crawl law list with pagination
             result = law_list_crawler.crawl_law_list(
                 topic=topic,
-                source='mst',
-                max_pages=5,
-                max_results=20
+                source='duthaoonline',
+                max_pages=1,
+                max_results=20,
+                similarity_threshold=0.3  # Lower threshold for better matching
             )
             
             if not result.success:

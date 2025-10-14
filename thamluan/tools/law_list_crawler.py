@@ -1,32 +1,38 @@
 """
-Law List Crawler - Crawl danh sách dự thảo luật với pagination
+Law List Crawler (Selenium version) - Crawl danh sách dự thảo luật
+Crawl từ: https://duthaoonline.quochoi.vn/du-thao
 """
 
-import requests
-from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException, WebDriverException
+from difflib import SequenceMatcher
 from typing import List, Dict, Any, Optional
-from urllib.parse import urljoin, quote_plus
-import logging
 from dataclasses import dataclass
-from datetime import datetime
 import hashlib
+import logging
+import time
 
-from core.config import config
 from core.types import ToolResult
+from core.config import config
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
 class DocumentCard:
-    """Thông tin về một văn bản luật từ danh sách"""
-    doc_id: str  # Unique ID (từ URL hoặc hash)
+    """Thông tin về một văn bản luật"""
+    doc_id: str
     title: str
-    url: str  # URL chi tiết
-    pdf_url: Optional[str]  # URL PDF nếu có
-    html_url: Optional[str]  # URL HTML nếu có
+    url: str
+    pdf_url: Optional[str]
+    html_url: Optional[str]
     date_published: Optional[str]
-    status: Optional[str]  # "Dự thảo", "Đang lấy ý kiến", "Đã ban hành"
+    status: Optional[str]
     summary: Optional[str]
     metadata: Dict[str, Any]
     
@@ -46,280 +52,249 @@ class DocumentCard:
 
 class LawListCrawler:
     """
-    Crawler danh sách dự thảo luật với các tính năng:
-    - Pagination tự động
-    - Card detection và metadata extraction
-    - Topic filtering
-    - Deduplication
+    Crawl danh sách dự thảo luật từ duthaoonline.quochoi.vn
+    Sử dụng Selenium để xử lý JavaScript dynamic content
     """
     
     def __init__(self):
-        self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': config.USER_AGENT,
-            'Accept': 'text/html,application/xhtml+xml,application/xml',
-            'Accept-Language': 'vi-VN,vi;q=0.9',
-        })
-        self.seen_docs = set()  # Track doc_ids đã thấy
-        
-        # Các trang danh sách dự thảo luật
-        self.law_sites = {
-            'mst': {
-                'name': 'Bộ KH&CN',
-                'list_url': 'https://mst.gov.vn/van-ban-phap-luat/du-thao',
-                'search_url': 'https://mst.gov.vn/tra-cuu/Pages/timkiem.aspx?keyword={query}',
-                'parser': self._parse_mst_list
-            },
-            # Có thể thêm các nguồn khác
-        }
+        self.base_url = "https://duthaoonline.quochoi.vn/du-thao"
+        self.driver = None
     
-    def crawl_law_list(
-        self, 
-        topic: str,
-        source: str = 'mst',
-        max_pages: int = 5,
-        max_results: int = 50
-    ) -> ToolResult:
-        """
-        Crawl danh sách văn bản luật theo topic
-        
-        Args:
-            topic: Chủ đề tìm kiếm
-            source: Nguồn crawl ('mst', ...)
-            max_pages: Số trang tối đa
-            max_results: Số kết quả tối đa
+    def _setup_driver(self):
+        """Setup Chrome driver với headless mode"""
+        try:
+            chrome_options = Options()
+            chrome_options.add_argument("--headless")  # Chạy ngầm
+            chrome_options.add_argument("--disable-gpu")
+            chrome_options.add_argument("--no-sandbox")
+            chrome_options.add_argument("--disable-dev-shm-usage")
+            chrome_options.add_argument("--window-size=1920,1080")
+            chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+            chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+            chrome_options.add_experimental_option('useAutomationExtension', False)
             
-        Returns:
-            ToolResult với list DocumentCards
+            # User agent
+            chrome_options.add_argument(
+                "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            )
+            
+            self.driver = webdriver.Chrome(options=chrome_options)
+            self.driver.set_page_load_timeout(30)
+            
+            logger.info("✅ Chrome driver initialized (headless mode)")
+            
+        except WebDriverException as e:
+            logger.error(f"Failed to initialize Chrome driver: {str(e)}")
+            raise
+    
+    def _cleanup_driver(self):
+        """Đóng driver"""
+        if self.driver:
+            try:
+                self.driver.quit()
+                logger.info("✅ Chrome driver closed")
+            except Exception as e:
+                logger.warning(f"Error closing driver: {str(e)}")
+    
+    def _calculate_similarity(self, a: str, b: str) -> float:
+        """
+        Tính độ tương đồng giữa 2 chuỗi
+        Return: float 0.0 - 1.0
+        """
+        return SequenceMatcher(None, a.lower(), b.lower()).ratio()
+    
+    def _extract_pdf_url_from_detail_page(self, detail_url: str) -> Optional[str]:
+        """
+        Truy cập vào trang chi tiết để lấy PDF URL (nếu có)
         """
         try:
-            logger.info(f"Crawling law list for topic: {topic}")
+            self.driver.get(detail_url)
+            time.sleep(2)  # Wait for page load
             
-            if source not in self.law_sites:
+            # Tìm link PDF (có thể có class 'btn-download' hoặc href chứa .pdf)
+            pdf_links = self.driver.find_elements(By.XPATH, "//a[contains(@href, '.pdf')]")
+            
+            if pdf_links:
+                pdf_url = pdf_links[0].get_attribute('href')
+                logger.info(f"  → Found PDF: {pdf_url}")
+                return pdf_url
+            
+            return None
+            
+        except Exception as e:
+            logger.warning(f"Error extracting PDF from {detail_url}: {str(e)}")
+            return None
+    
+    def crawl_law_list(
+        self,
+        topic: str,
+        source: str = 'duthaoonline',
+        max_pages: int = 5,
+        max_results: int = 30,
+        similarity_threshold: float = 0.3
+    ) -> ToolResult:
+        """
+        Crawl danh sách dự thảo luật từ duthaoonline.quochoi.vn
+        
+        Args:
+            topic: Chủ đề/từ khóa tìm kiếm
+            source: Nguồn (mặc định 'duthaoonline')
+            max_pages: Số trang tối đa (hiện tại chỉ 1 trang)
+            max_results: Số kết quả tối đa
+            similarity_threshold: Ngưỡng độ tương đồng (0.0-1.0)
+        
+        Returns:
+            ToolResult với list DocumentCard
+        """
+        try:
+            logger.info(f"🔍 Crawling law list for topic: '{topic}'")
+            logger.info(f"📍 Source: {self.base_url}")
+            logger.info(f"🎯 Similarity threshold: {similarity_threshold}")
+            
+            # Setup driver
+            self._setup_driver()
+            
+            # Navigate to page
+            logger.info(f"🌐 Loading page: {self.base_url}")
+            self.driver.get(self.base_url)
+            
+            # Wait for content to load (wait for .col-10 elements)
+            logger.info("⏳ Waiting for content to load...")
+            try:
+                WebDriverWait(self.driver, 15).until(
+                    EC.presence_of_element_located((By.CLASS_NAME, "col-10"))
+                )
+                time.sleep(3)  # Extra wait for JS rendering
+                logger.info("✅ Page loaded successfully")
+                
+            except TimeoutException:
+                logger.error("❌ Timeout waiting for content")
+                self._cleanup_driver()
                 return ToolResult(
                     success=False,
-                    error=f"Unknown source: {source}"
+                    error="Timeout: Page did not load in time"
                 )
             
-            site_info = self.law_sites[source]
+            # Find all article elements
+            articles = self.driver.find_elements(By.CLASS_NAME, "col-10")
+            logger.info(f"📄 Found {len(articles)} articles on page")
+            
+            if not articles:
+                self._cleanup_driver()
+                return ToolResult(
+                    success=False,
+                    error="No articles found on page"
+                )
+            
+            # Process each article
             documents = []
+            processed_urls = set()
             
-            # Crawl với pagination
-            for page in range(1, max_pages + 1):
-                logger.info(f"Crawling page {page}/{max_pages}...")
+            for idx, article in enumerate(articles, 1):
+                try:
+                    # Find link and title
+                    link_elem = article.find_element(By.CLASS_NAME, "d-inline-block")
+                    url = link_elem.get_attribute("href")
+                    
+                    title_elem = article.find_element(By.TAG_NAME, "h2")
+                    title = title_elem.text.strip()
+                    
+                    if not url or not title:
+                        logger.debug(f"  Article {idx}: Missing URL or title, skipping")
+                        continue
+                    
+                    # Check duplicate
+                    if url in processed_urls:
+                        logger.debug(f"  Article {idx}: Duplicate URL, skipping")
+                        continue
+                    
+                    # Calculate similarity
+                    similarity = self._calculate_similarity(topic, title)
+                    
+                    logger.info(f"📰 Article {idx}/{len(articles)}:")
+                    logger.info(f"   Title: {title[:80]}...")
+                    logger.info(f"   Similarity: {similarity:.2%}")
+                    
+                    # Check if meets threshold
+                    if similarity >= similarity_threshold:
+                        logger.info(f"   ✅ MATCH! (threshold: {similarity_threshold})")
+                        
+                        # Create document ID
+                        doc_id = hashlib.md5(url.encode()).hexdigest()[:16]
+                        
+                        # Try to extract PDF URL (optional, costs time)
+                        pdf_url = None
+                        # Uncomment if you want to extract PDF:
+                        # if len(documents) < 5:  # Only for first 5 to save time
+                        #     pdf_url = self._extract_pdf_url_from_detail_page(url)
+                        
+                        # Create DocumentCard
+                        doc = DocumentCard(
+                            doc_id=doc_id,
+                            title=title,
+                            url=url,
+                            pdf_url=pdf_url,
+                            html_url=url,
+                            date_published=None,  # Can be extracted if needed
+                            status="Dự thảo",
+                            summary=None,
+                            metadata={
+                                "source": "duthaoonline.quochoi.vn",
+                                "similarity": round(similarity, 3),
+                                "crawled_at": time.strftime("%Y-%m-%d %H:%M:%S")
+                            }
+                        )
+                        
+                        documents.append(doc)
+                        processed_urls.add(url)
+                        
+                        logger.info(f"   💾 Saved: {len(documents)}/{max_results}")
+                        
+                        # Check if reached max
+                        if len(documents) >= max_results:
+                            logger.info(f"🎯 Reached max results: {max_results}")
+                            break
+                    else:
+                        logger.info(f"   ❌ Below threshold, skipping")
                 
-                page_docs = self._crawl_page(site_info, topic, page)
-                
-                if not page_docs:
-                    logger.info(f"No more results at page {page}, stopping")
-                    break
-                
-                # Filter theo topic relevance
-                relevant_docs = self._filter_by_topic(page_docs, topic)
-                documents.extend(relevant_docs)
-                
-                logger.info(f"  → Found {len(relevant_docs)} relevant documents")
-                
-                if len(documents) >= max_results:
-                    documents = documents[:max_results]
-                    break
+                except Exception as e:
+                    logger.warning(f"⚠️ Error processing article {idx}: {str(e)}")
+                    continue
             
-            # Deduplication
-            unique_docs = self._deduplicate_documents(documents)
+            # Cleanup
+            self._cleanup_driver()
             
-            logger.info(f"✅ Total: {len(unique_docs)} unique documents")
+            # Check results
+            if not documents:
+                logger.warning(f"⚠️ No documents matched topic '{topic}' (threshold: {similarity_threshold})")
+                logger.warning(f"💡 Try lowering similarity_threshold or use different keywords")
+                return ToolResult(
+                    success=False,
+                    error=f"No documents matched topic '{topic}' with threshold {similarity_threshold}"
+                )
+            
+            logger.info(f"✅ Crawl complete: {len(documents)} documents found")
             
             return ToolResult(
                 success=True,
                 data={
-                    'documents': unique_docs,
-                    'count': len(unique_docs),
-                    'source': source
-                }
+                    "documents": documents,  # List of DocumentCard objects
+                    "count": len(documents),
+                    "source": "duthaoonline.quochoi.vn",
+                    "topic": topic,
+                    "similarity_threshold": similarity_threshold
+                },
+                message=f"Found {len(documents)} law documents"
             )
-            
+        
         except Exception as e:
-            logger.error(f"Law list crawl error: {str(e)}")
+            logger.error(f"❌ Crawl error: {str(e)}")
+            self._cleanup_driver()
             return ToolResult(
                 success=False,
-                error=f"Failed to crawl law list: {str(e)}"
+                error=f"Crawl failed: {str(e)}"
             )
-    
-    def _crawl_page(
-        self,
-        site_info: Dict,
-        topic: str,
-        page: int
-    ) -> List[DocumentCard]:
-        """Crawl một trang danh sách"""
-        try:
-            # Build URL với query và page number
-            if '{query}' in site_info.get('search_url', ''):
-                url = site_info['search_url'].format(query=quote_plus(topic))
-                if page > 1:
-                    url += f"&page={page}"
-            else:
-                url = site_info['list_url']
-                if page > 1:
-                    url += f"?page={page}"
-            
-            response = self.session.get(url, timeout=30)
-            response.raise_for_status()
-            response.encoding = response.apparent_encoding
-            
-            soup = BeautifulSoup(response.text, 'lxml')
-            
-            # Parse documents
-            parser = site_info['parser']
-            documents = parser(soup, site_info['name'])
-            
-            return documents
-            
-        except Exception as e:
-            logger.error(f"Error crawling page {page}: {str(e)}")
-            return []
-    
-    def _parse_mst_list(self, soup: BeautifulSoup, source: str) -> List[DocumentCard]:
-        """Parse danh sách từ mst.gov.vn"""
-        documents = []
-        
-        # Tìm các card/item văn bản
-        # Thử nhiều selectors khác nhau
-        items = (
-            soup.find_all('div', class_='item') or
-            soup.find_all('div', class_='document-item') or
-            soup.find_all('li', class_='search-result') or
-            soup.find_all('article')
-        )
-        
-        for item in items:
-            try:
-                # Extract title và link
-                title_elem = (
-                    item.find('h3') or 
-                    item.find('h2') or 
-                    item.find('a', class_='title') or
-                    item.find('a')
-                )
-                
-                if not title_elem:
-                    continue
-                
-                title = title_elem.get_text(strip=True)
-                url = title_elem.get('href', '')
-                
-                if not url or not title:
-                    continue
-                
-                # Make absolute URL
-                url = urljoin('https://mst.gov.vn', url)
-                
-                # Generate doc_id từ URL
-                doc_id = hashlib.md5(url.encode()).hexdigest()[:16]
-                
-                # Extract PDF/HTML links
-                pdf_url = None
-                html_url = None
-                
-                # Tìm link PDF
-                pdf_link = item.find('a', href=lambda x: x and '.pdf' in x.lower())
-                if pdf_link:
-                    pdf_url = urljoin('https://mst.gov.vn', pdf_link['href'])
-                
-                # Extract date
-                date_published = None
-                date_elem = (
-                    item.find('span', class_='date') or
-                    item.find('time') or
-                    item.find('span', class_='publish-date')
-                )
-                if date_elem:
-                    date_published = date_elem.get_text(strip=True)
-                
-                # Extract summary
-                summary = None
-                summary_elem = (
-                    item.find('p', class_='summary') or
-                    item.find('div', class_='description') or
-                    item.find('p')
-                )
-                if summary_elem:
-                    summary = summary_elem.get_text(strip=True)
-                
-                # Extract status
-                status = None
-                status_elem = item.find('span', class_='status')
-                if status_elem:
-                    status = status_elem.get_text(strip=True)
-                
-                doc = DocumentCard(
-                    doc_id=doc_id,
-                    title=title,
-                    url=url,
-                    pdf_url=pdf_url,
-                    html_url=html_url if not pdf_url else None,
-                    date_published=date_published,
-                    status=status,
-                    summary=summary,
-                    metadata={'source': source}
-                )
-                
-                documents.append(doc)
-                
-            except Exception as e:
-                logger.warning(f"Error parsing document item: {str(e)}")
-                continue
-        
-        return documents
-    
-    def _filter_by_topic(
-        self,
-        documents: List[DocumentCard],
-        topic: str
-    ) -> List[DocumentCard]:
-        """Lọc documents theo độ liên quan với topic"""
-        topic_lower = topic.lower()
-        topic_keywords = set(topic_lower.split())
-        
-        relevant_docs = []
-        
-        for doc in documents:
-            # Calculate relevance score
-            title_lower = doc.title.lower()
-            summary_lower = (doc.summary or '').lower()
-            combined = title_lower + ' ' + summary_lower
-            
-            # Count keyword matches
-            score = sum(1 for kw in topic_keywords if kw in combined)
-            
-            # Bonus nếu match trong title
-            if any(kw in title_lower for kw in topic_keywords):
-                score += 2
-            
-            # Keep if có ít nhất 1 keyword match
-            if score > 0:
-                doc.metadata['relevance_score'] = score
-                relevant_docs.append(doc)
-        
-        # Sort by relevance score
-        relevant_docs.sort(key=lambda x: x.metadata.get('relevance_score', 0), reverse=True)
-        
-        return relevant_docs
-    
-    def _deduplicate_documents(
-        self,
-        documents: List[DocumentCard]
-    ) -> List[DocumentCard]:
-        """Remove duplicate documents"""
-        seen = set()
-        unique = []
-        
-        for doc in documents:
-            if doc.doc_id not in seen:
-                seen.add(doc.doc_id)
-                unique.append(doc)
-        
-        return unique
 
 
 # Singleton instance
