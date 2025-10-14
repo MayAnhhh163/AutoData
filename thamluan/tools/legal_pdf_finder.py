@@ -147,7 +147,7 @@ class LegalPDFFinderTool:
         queries.append(f'{keywords} (tải về OR download) PDF')
 
         # Query 4: Tìm văn bản pháp luật
-        queries.append(f'văn bản {keywords} PDF site:thuvienphapluat.vn OR site:luatvietnam.vn')
+        queries.append(f'văn bản {keywords} PDF site:duthaoonline.quochoi.vn OR site:luatvietnam.vn')
 
         # Query 5: Tìm trên trang Chính phủ/Bộ
         queries.append(f'{keywords} PDF site:chinhphu.vn OR site:moj.gov.vn OR site:most.gov.vn')
