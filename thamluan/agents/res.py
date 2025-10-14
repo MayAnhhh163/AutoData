@@ -195,11 +195,15 @@ class KeywordExtractorAgent(BaseAgent):
 
             # Extract keywords using existing tool
             from tools.pdf_extractor import pdf_extractor_tool
-            keywords_result = pdf_extractor_tool.extract_keywords_from_text(all_content)
+            
+            # Extract keywords
+            keywords_result = pdf_extractor_tool.extract_keywords(all_content, max_keywords=50)
+            # Extract key phrases
+            phrases_result = pdf_extractor_tool.extract_key_phrases(all_content, max_phrases=20)
 
-            if keywords_result.success:
+            if keywords_result.success and phrases_result.success:
                 keywords = keywords_result.data.get('keywords', [])
-                key_phrases = keywords_result.data.get('key_phrases', [])
+                key_phrases = phrases_result.data.get('key_phrases', [])
                 
                 extracted_keywords = ExtractedKeywords(
                     main_keywords=keywords[:20],
@@ -220,13 +224,18 @@ class KeywordExtractorAgent(BaseAgent):
                     'extracted_keywords': extracted_keywords
                 })
             else:
-                task = self.complete_task(current_task, {}, error=keywords_result.error)
-                state = self.log_error(state, keywords_result.error)
+                error_msg = keywords_result.error or phrases_result.error or "Unknown error"
+                task = self.complete_task(current_task, {}, error=error_msg)
+                state = self.log_error(state, error_msg)
 
             return state
 
         except Exception as e:
             logger.error(f"Keyword extractor error: {str(e)}")
+            current_task = state.get('current_task')
+            if current_task:
+                task = self.complete_task(current_task, {}, error=f"Keyword extraction failed: {str(e)}")
+                state = self.update_state(state, {'current_task': task})
             return self.log_error(state, f"Keyword extraction failed: {str(e)}")
 
 

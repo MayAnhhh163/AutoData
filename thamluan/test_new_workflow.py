@@ -34,14 +34,19 @@ async def test_workflow():
         # Summary
         print("\n📊 SUMMARY:")
         print(f"  - News Articles Found: {len(result.get('news_articles', []))}")
-        print(f"  - Keywords Extracted: {len(result.get('extracted_keywords', {}).get('main_keywords', []))}")
+        
+        keywords = result.get('extracted_keywords')
+        if keywords and hasattr(keywords, 'main_keywords'):
+            print(f"  - Keywords Extracted: {len(keywords.main_keywords)}")
+        else:
+            print(f"  - Keywords Extracted: 0")
+            
         print(f"  - Opinion Articles Analyzed: {len(result.get('analyzed_articles', []))}")
         print(f"  - CSV Output: {result.get('csv_output_path', 'N/A')}")
         print(f"  - Errors: {len(result.get('errors', []))}")
         
         # Show extracted keywords
-        keywords = result.get('extracted_keywords')
-        if keywords:
+        if keywords and hasattr(keywords, 'main_keywords'):
             print("\n🔑 TOP KEYWORDS:")
             for i, kw in enumerate(keywords.main_keywords[:10], 1):
                 print(f"  {i}. {kw}")
