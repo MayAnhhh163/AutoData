@@ -112,6 +112,7 @@ class ArticleScraperTool:
         if not url:
             return False
         return url.startswith('http://') or url.startswith('https://')
+    
 
     def scrape_multiple_articles(self, urls: List[str], existing_urls: set = None) -> ToolResult:
         try:
@@ -125,6 +126,7 @@ class ArticleScraperTool:
                     logger.warning(f"Skipping invalid URL: {url}")
                     failed += 1
                     continue
+                
 
                 if url in seen_urls:
                     if url not in self.processed_duplicates:

@@ -31,6 +31,7 @@ class NewsSearchAgent(BaseAgent):
                 return state
 
             topic = current_task.input_data.get('topic', state['project_name'])
+            
 
             # Generate search queries for NEWS (not opinions)
             news_queries = [
@@ -40,6 +41,9 @@ class NewsSearchAgent(BaseAgent):
                 f"{topic} chi tiết",
                 f"toàn văn {topic}",
             ]
+            
+            logger.info(f"🔍 Searching for news about: {topic}")
+            
 
             logger.info(f"🔍 Searching for news about: {topic}")
 
@@ -91,6 +95,7 @@ class NewsSearchAgent(BaseAgent):
             state = self.update_state(state, {
                 'current_task': task,
                 'search_queries': news_queries,
+                'search_results': unique_results[:30]  # Top 30
                 'search_results': unique_results[:10]  # Top 10
             })
 
@@ -136,6 +141,7 @@ class NewsScraperAgent(BaseAgent):
             if scrape_result.success:
                 articles = scrape_result.data['articles']
                 articles_dict = [a.to_dict() for a in articles]
+                
 
                 logger.info(f"✅ Scraped {len(articles_dict)} news articles")
 
@@ -187,6 +193,10 @@ class KeywordExtractorAgent(BaseAgent):
 
             # Combine all article content
             all_content = "\n\n".join([
+                f"{art.get('title', '')} {art.get('content', '')}" 
+                for art in news_articles
+            ])
+            
                 f"{art.get('title', '')} {art.get('content', '')}"
                 for art in news_articles
             ])
@@ -195,6 +205,7 @@ class KeywordExtractorAgent(BaseAgent):
 
             # Extract keywords using existing tool
             from tools.pdf_extractor import pdf_extractor_tool
+            
 
             # Extract keywords
             keywords_result = pdf_extractor_tool.extract_keywords(all_content, max_keywords=50)
@@ -204,6 +215,7 @@ class KeywordExtractorAgent(BaseAgent):
             if keywords_result.success and phrases_result.success:
                 keywords = keywords_result.data.get('keywords', [])
                 key_phrases = phrases_result.data.get('key_phrases', [])
+                
 
                 extracted_keywords = ExtractedKeywords(
                     main_keywords=keywords[:20],
@@ -323,6 +335,9 @@ class SearchAgent(BaseAgent):
                 # Skip homepage-only URLs (likely false positives)
                 if url.endswith('/') or url.count('/') <= 3:
                     # Allow if it has article indicators in the path
+                    if not any(indicator in url.lower() for indicator in ['-', 'tin-tuc', 'bai-viet', 'news', 'article', '.htm']):
+                        continue
+                
                     if not any(indicator in url.lower() for indicator in
                                ['-', 'tin-tuc', 'bai-viet', 'news', 'article', '.htm']):
                         continue
@@ -336,6 +351,9 @@ class SearchAgent(BaseAgent):
             important_keywords = []
             if extracted_keywords:
                 important_keywords = (extracted_keywords.key_phrases[:5] if extracted_keywords.key_phrases else []) + \
+                                   (extracted_keywords.main_keywords[:5] if extracted_keywords.main_keywords else [])
+                important_keywords = [kw.lower() for kw in important_keywords if len(kw) > 3]
+            
                                      (extracted_keywords.main_keywords[:5] if extracted_keywords.main_keywords else [])
                 important_keywords = [kw.lower() for kw in important_keywords if len(kw) > 3]
 
@@ -344,6 +362,7 @@ class SearchAgent(BaseAgent):
                 title = result.get('title', '').lower()
                 snippet = result.get('snippet', '').lower()
                 combined_text = title + ' ' + snippet
+                
 
                 score = 0
                 # Title matches worth more
@@ -352,6 +371,7 @@ class SearchAgent(BaseAgent):
                         score += 3
                     elif kw in snippet:
                         score += 1
+                
 
                 # Bonus for opinion indicators
                 opinion_words = ['ý kiến', 'bình luận', 'phản hồi', 'góp ý', 'thảo luận', 'tranh luận', 'chuyên gia']
@@ -359,6 +379,13 @@ class SearchAgent(BaseAgent):
                     if word in combined_text:
                         score += 2
                         break
+                
+                return score
+            
+            # Score all results
+            for result in unique_results:
+                result['relevance_score'] = calculate_relevance_score(result)
+            
 
                 return score
 
@@ -370,6 +397,16 @@ class SearchAgent(BaseAgent):
             from core.config import config
             trusted_results = [r for r in unique_results if any(d in r['url'] for d in config.TRUSTED_DOMAINS)]
             other_results = [r for r in unique_results if not any(d in r['url'] for d in config.TRUSTED_DOMAINS)]
+            
+            # Sort both by relevance score
+            trusted_results = sorted(trusted_results, key=lambda x: x.get('relevance_score', 0), reverse=True)
+            other_results = sorted(other_results, key=lambda x: x.get('relevance_score', 0), reverse=True)
+            
+            # Combine: trusted first, then high-scoring others
+            final_results = trusted_results[:25] + other_results[:10]  # Total max 35
+            
+            avg_score = sum(r.get('relevance_score', 0) for r in final_results) / len(final_results) if final_results else 0
+            logger.info(f"📊 Final selection: {len(trusted_results[:25])} trusted, {len(other_results[:10])} other sources")
 
             # Sort both by relevance score
             trusted_results = sorted(trusted_results, key=lambda x: x.get('relevance_score', 0), reverse=True)
@@ -567,6 +604,7 @@ class ExporterAgent(BaseAgent):
                 state = self.update_state(state, {'current_task': task, 'is_complete': True})
                 return self.log_error(state, export_result.error)
             csv_path = export_result.data['filepath']
+            logger.info(f"✅ Exported {len(articles)} articles to {csv_path}")
             logger.info(f" Exported {len(articles)} articles to {csv_path}")
 
             # Khởi tạo embedding model nếu chưa có

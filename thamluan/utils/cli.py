@@ -17,6 +17,24 @@ def parse_arguments() -> Any:
         description="AutoData - AI Article-Based Crawler (No PDF Required)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
+Examples:
+  # Run with default topic
+  python main.py
+
+  # Run with custom topic (KHÔNG CẦN URL!)
+  python main.py --project "Luật Đất đai 2025"
+
+  # Show configuration
+  python main.py --show-config
+  
+Workflow:
+  1. Tìm tin tức về dự luật
+  2. Crawl nội dung tin tức
+  3. Extract keywords
+  4. Tìm ý kiến công chúng
+  5. Phân tích sentiment
+  6. Export CSV
+        """
     Examples:
       # Run with default topic
       python main.py

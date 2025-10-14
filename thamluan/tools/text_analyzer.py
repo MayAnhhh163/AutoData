@@ -33,6 +33,7 @@ class TextAnalyzerTool:
         """
         try:
             queries = []
+            
 
             # Lấy top keywords từ PDF
             top_keywords = []
@@ -42,6 +43,7 @@ class TextAnalyzerTool:
                 # Nếu không đủ, thêm main_keywords
                 if len(top_keywords) < 3 and keywords.main_keywords:
                     top_keywords.extend(keywords.main_keywords[:3])
+            
 
             # Strategy 1: Base topic với opinion keywords
             if base_topic:
@@ -52,6 +54,7 @@ class TextAnalyzerTool:
                     f"dư luận về {base_topic}",
                 ]
                 queries.extend(opinion_patterns[:3])
+            
 
             # Strategy 2: Combine keywords với base topic để tìm nội dung cụ thể hơn
             if top_keywords and base_topic:
@@ -60,6 +63,7 @@ class TextAnalyzerTool:
                     if len(kw) < 5 or kw.lower() in ['nghị định', 'điều', 'khoản', 'luật']:
                         continue
                     queries.append(f"{base_topic} {kw}")
+            
 
             # Strategy 3: Nếu không có keywords, dùng các pattern chung
             if not queries:
@@ -68,6 +72,7 @@ class TextAnalyzerTool:
                     f"{base_topic} thảo luận",
                     f"phản hồi về {base_topic}",
                 ])
+            
 
             # Xóa trùng lặp và clean up
             unique_queries = []
@@ -77,6 +82,10 @@ class TextAnalyzerTool:
                 if q_clean not in seen and len(q) > 10:
                     unique_queries.append(q)
                     seen.add(q_clean)
+            
+            # Limit to reasonable number
+            final_queries = unique_queries[:8]
+            
 
             # Limit to reasonable number
             final_queries = unique_queries[:8]
