@@ -9,16 +9,6 @@ from langgraph.graph import StateGraph, END
 from core.types import AgentState, TaskType, create_initial_state
 from agents import (
     manager_agent,
-    # Hybrid workflow agents (RECOMMENDED)
-    law_list_search_agent,
-    pdf_download_agent,
-    pdf_content_extractor_agent,
-    vector_db_storage_agent,
-    enhanced_opinion_search_agent,
-    enhanced_opinion_crawler_agent,
-    nlp_analysis_agent,
-    hybrid_exporter_agent,
-    # Article-based workflow agents
     # New workflow agents
     news_search_agent,
     news_scraper_agent,
@@ -27,7 +17,6 @@ from agents import (
     web_crawler_agent,
     pdf_handler_agent,
     content_extractor_agent,
-    # Opinion search agents (legacy)
     # Opinion search agents
     search_agent,
     article_analyzer_agent,
@@ -43,28 +32,6 @@ def create_workflow() -> StateGraph:
 
     # Nodes
     workflow.add_node("manager", manager_agent.execute)
-    
-    # Hybrid workflow nodes (RECOMMENDED - Full pipeline)
-    workflow.add_node("law_list_search_agent", law_list_search_agent.execute)
-    workflow.add_node("pdf_download_agent", pdf_download_agent.execute)
-    workflow.add_node("pdf_content_extractor_agent", pdf_content_extractor_agent.execute)
-    workflow.add_node("vector_db_storage_agent", vector_db_storage_agent.execute)
-    workflow.add_node("enhanced_opinion_search_agent", enhanced_opinion_search_agent.execute)
-    workflow.add_node("enhanced_opinion_crawler_agent", enhanced_opinion_crawler_agent.execute)
-    workflow.add_node("nlp_analysis_agent", nlp_analysis_agent.execute)
-    workflow.add_node("hybrid_exporter_agent", hybrid_exporter_agent.execute)
-    
-    # Article-based workflow nodes (simple)
-    workflow.add_node("news_search_agent", news_search_agent.execute)
-    workflow.add_node("news_scraper_agent", news_scraper_agent.execute)
-    workflow.add_node("keyword_extractor_agent", keyword_extractor_agent.execute)
-    
-    # Old PDF workflow nodes (legacy)
-    workflow.add_node("web_crawler", web_crawler_agent.execute)
-    workflow.add_node("pdf_handler", pdf_handler_agent.execute)
-    workflow.add_node("content_extractor", content_extractor_agent.execute)
-    
-    # Opinion search nodes (legacy)
 
     # New workflow nodes (article-based)
     workflow.add_node("news_search_agent", news_search_agent.execute)
@@ -99,24 +66,6 @@ def create_workflow() -> StateGraph:
 
         task_type = current_task.task_type
         next_agent = {
-            # Hybrid workflow routing (RECOMMENDED)
-            TaskType.SEARCH_LAW_LIST: "law_list_search_agent",
-            TaskType.DOWNLOAD_PDFS: "pdf_download_agent",
-            TaskType.EXTRACT_PDF_CONTENT: "pdf_content_extractor_agent",
-            TaskType.STORE_VECTOR_DB: "vector_db_storage_agent",
-            TaskType.SEARCH_OPINIONS: "enhanced_opinion_search_agent",
-            TaskType.CRAWL_OPINIONS_FULL: "enhanced_opinion_crawler_agent",
-            TaskType.NLP_ANALYSIS: "nlp_analysis_agent",
-            TaskType.EXPORT_DATA: "hybrid_exporter_agent",
-            # Article-based workflow routing
-            TaskType.SEARCH_NEWS: "news_search_agent",
-            TaskType.SCRAPE_NEWS_ARTICLES: "news_scraper_agent",
-            TaskType.EXTRACT_KEYWORDS_FROM_NEWS: "keyword_extractor_agent",
-            # Old PDF workflow routing (legacy)
-            TaskType.CRAWL_WEB: "web_crawler",
-            TaskType.DOWNLOAD_PDF: "pdf_handler",
-            TaskType.EXTRACT_CONTENT: "content_extractor",
-            # Legacy opinion routing
             # New workflow routing
             TaskType.SEARCH_NEWS: "news_search_agent",
             TaskType.SCRAPE_NEWS_ARTICLES: "news_scraper_agent",
@@ -128,6 +77,7 @@ def create_workflow() -> StateGraph:
             # Opinion search routing (common)
             TaskType.SEARCH_OPINIONS: "search_agent",
             TaskType.SCRAPE_ARTICLES: "article_analyzer",
+            TaskType.EXPORT_DATA: "exporter_agent"
         }.get(task_type, END)
 
         logger.info(f" Routing to: {next_agent}")
@@ -147,24 +97,6 @@ def create_workflow() -> StateGraph:
         "manager",
         route_from_manager,
         {
-            # Hybrid workflow edges (RECOMMENDED)
-            "law_list_search_agent": "law_list_search_agent",
-            "pdf_download_agent": "pdf_download_agent",
-            "pdf_content_extractor_agent": "pdf_content_extractor_agent",
-            "vector_db_storage_agent": "vector_db_storage_agent",
-            "enhanced_opinion_search_agent": "enhanced_opinion_search_agent",
-            "enhanced_opinion_crawler_agent": "enhanced_opinion_crawler_agent",
-            "nlp_analysis_agent": "nlp_analysis_agent",
-            "hybrid_exporter_agent": "hybrid_exporter_agent",
-            # Article-based workflow edges
-            "news_search_agent": "news_search_agent",
-            "news_scraper_agent": "news_scraper_agent",
-            "keyword_extractor_agent": "keyword_extractor_agent",
-            # Old PDF workflow edges (legacy)
-            "web_crawler": "web_crawler",
-            "pdf_handler": "pdf_handler",
-            "content_extractor": "content_extractor",
-            # Legacy edges
             # New workflow edges
             "news_search_agent": "news_search_agent",
             "news_scraper_agent": "news_scraper_agent",
@@ -182,19 +114,6 @@ def create_workflow() -> StateGraph:
     )
 
     # All nodes return to manager after completion
-    all_nodes = [
-        # Hybrid workflow nodes
-        "law_list_search_agent", "pdf_download_agent", "pdf_content_extractor_agent",
-        "vector_db_storage_agent", "enhanced_opinion_search_agent", 
-        "enhanced_opinion_crawler_agent", "nlp_analysis_agent", "hybrid_exporter_agent",
-        # Article-based nodes
-        "news_search_agent", "news_scraper_agent", "keyword_extractor_agent",
-        # Legacy nodes
-        "web_crawler", "pdf_handler", "content_extractor",
-        "search_agent", "article_analyzer", "exporter_agent"
-    ]
-    
-    for node in all_nodes:
     for node in ["news_search_agent", "news_scraper_agent", "keyword_extractor_agent",
                  "web_crawler", "pdf_handler", "content_extractor",
                  "search_agent", "article_analyzer", "exporter_agent"]:
@@ -206,7 +125,6 @@ def create_workflow() -> StateGraph:
 async def run_workflow_async(project_name: str, target_url: str = None) -> Dict[str, Any]:
     """
     Chạy workflow bất đồng bộ với project name (chủ đề).
-    
 
     Args:
         project_name: Tên dự luật/chủ đề (BẮT BUỘC)
