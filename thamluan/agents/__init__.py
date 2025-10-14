@@ -14,19 +14,38 @@ from .res import (
     scraper_agent, 
     exporter_agent
 )
+from .hybrid_agents import (
+    law_list_search_agent,
+    pdf_download_agent,
+    pdf_content_extractor_agent,
+    vector_db_storage_agent,
+    enhanced_opinion_search_agent,
+    enhanced_opinion_crawler_agent,
+    nlp_analysis_agent,
+    hybrid_exporter_agent
+)
 
 __all__ = [
     "BaseAgent",
     "manager_agent",
-    # New workflow agents
+    # Hybrid workflow agents (RECOMMENDED)
+    "law_list_search_agent",
+    "pdf_download_agent",
+    "pdf_content_extractor_agent",
+    "vector_db_storage_agent",
+    "enhanced_opinion_search_agent",
+    "enhanced_opinion_crawler_agent",
+    "nlp_analysis_agent",
+    "hybrid_exporter_agent",
+    # Article-based workflow agents
     "news_search_agent",
     "news_scraper_agent",
     "keyword_extractor_agent",
-    # Old PDF workflow agents
+    # Old PDF workflow agents (legacy)
     "web_crawler_agent",
     "pdf_handler_agent",
     "content_extractor_agent",
-    # Opinion search agents
+    # Opinion search agents (legacy)
     "search_agent",
     "article_analyzer_agent",
     "scraper_agent",

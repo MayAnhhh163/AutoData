@@ -30,21 +30,27 @@ class TaskStatus(str, Enum):
 
 class TaskType(str, Enum):
     """Các loại task trong workflow"""
-    # New workflow (article-based, no PDF)
+    # HYBRID WORKFLOW (Full pipeline - recommended)
+    SEARCH_LAW_LIST = "search_law_list"  # Tìm danh sách văn bản luật (với pagination)
+    DOWNLOAD_PDFS = "download_pdfs"  # Download PDFs (với hash dedup)
+    EXTRACT_PDF_CONTENT = "extract_pdf_content"  # Extract nội dung từ PDFs
+    STORE_VECTOR_DB = "store_vector_db"  # Lưu vào Vector DB
+    SEARCH_OPINIONS = "search_opinions"  # Tìm URLs của opinions
+    CRAWL_OPINIONS_FULL = "crawl_opinions_full"  # Crawl FULL CONTENT opinions
+    NLP_ANALYSIS = "nlp_analysis"  # Phân tích NLP (sentiment + stance + topics)
+    EXPORT_DATA = "export_data"  # Export CSV
+    
+    # Article-based workflow (simple, no PDF)
     SEARCH_NEWS = "search_news"  # Tìm tin tức về dự luật
     SCRAPE_NEWS_ARTICLES = "scrape_news_articles"  # Scrape nội dung tin tức
     EXTRACT_KEYWORDS_FROM_NEWS = "extract_keywords_from_news"  # Extract keywords từ tin tức
     
-    # Old PDF workflow (kept for compatibility)
+    # Old/legacy tasks
     CRAWL_WEB = "crawl_web"
     DOWNLOAD_PDF = "download_pdf"
     EXTRACT_CONTENT = "extract_content"
-    
-    # Opinion gathering (common to both workflows)
-    SEARCH_OPINIONS = "search_opinions"
-    SCRAPE_COMMENTS = "scrape_comments"  # Kept for backward compatibility
-    SCRAPE_ARTICLES = "scrape_articles"  # Scrape opinion articles
-    EXPORT_DATA = "export_data"
+    SCRAPE_COMMENTS = "scrape_comments"
+    SCRAPE_ARTICLES = "scrape_articles"
 
 
 @dataclass
@@ -145,9 +151,18 @@ class AgentState(TypedDict):
     search_results: List[Dict[str, Any]]  # Kết quả tìm kiếm
     collected_comments: Annotated[List[Comment], "All collected comments"]
     
-    # Article scraping and analysis
+    # Hybrid workflow data
+    law_documents: Annotated[List[Dict[str, Any]], "Law documents from list crawler"]
+    pdf_paths: Annotated[List[str], "Downloaded PDF paths"]
+    opinion_urls: Annotated[List[Dict[str, Any]], "Opinion article URLs"]
+    opinions_raw: Annotated[List[Dict[str, Any]], "Raw opinions with full content"]
+    analyzed_opinions: Annotated[List[Dict[str, Any]], "Opinions with NLP analysis"]
+    
+    # Article-based workflow data (legacy)
     news_articles: Annotated[List[Dict[str, Any]], "Initial news articles about the law"]
     analyzed_articles: Annotated[List[Dict[str, Any]], "Opinion articles with sentiment analysis"]
+    
+    # Tracking and flags
     processed_urls: Annotated[set, "URLs that have been scraped"]
     scrape_articles_done: bool  # Flag to indicate scraping is complete
     scrape_news_done: bool  # Flag to indicate news scraping is complete
@@ -214,8 +229,16 @@ def create_initial_state(project_name: str, target_url: str = None) -> AgentStat
         search_queries=[],
         search_results=[],
         collected_comments=[],
+        # Hybrid workflow
+        law_documents=[],
+        pdf_paths=[],
+        opinion_urls=[],
+        opinions_raw=[],
+        analyzed_opinions=[],
+        # Article-based workflow
         news_articles=[],
         analyzed_articles=[],
+        # Tracking
         processed_urls=set(),
         scrape_articles_done=False,
         scrape_news_done=False,
